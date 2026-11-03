@@ -216,7 +216,7 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
           <div class="plants" id="cfgPlants"></div></div>
         <div class="sum"><span class="hint">Precio de prueba</span><span class="price mono" id="cfgPrice"></span></div>
         <div class="row">
-          <button class="btn primary" id="cfgAdd">Agregar al proyecto</button>
+          <button class="btn primary" id="cfgAdd">Agregar al conjunto</button>
           <button class="btn" id="cfgAR">Ver en mi espacio</button>
           <button class="btn" id="cfgSet" hidden></button>
         </div>
@@ -228,8 +228,8 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
   <!-- PROYECTO -->
   <section class="view" id="v-proyecto" hidden>
     <div class="head">
-      <h1>Tu proyecto</h1>
-      <p class="lede">Todas las piezas juntas, en fila y a escala real. Colócalas en tu espacio para ver cómo conviven.</p>
+      <h1>Tu conjunto</h1>
+      <p class="lede">Arma un conjunto con varias macetas, elige cómo se agrupan y míralo a escala real en tu espacio.</p>
     </div>
     <div class="cfg">
       <div class="stage">
@@ -238,10 +238,13 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
             <button slot="ar-button" hidden></button>
           </model-viewer>
           <span class="busy" id="prjBusy" hidden>Actualizando…</span>
+          <span class="dims" id="prjDims"></span>
         </div>
         <div class="row">
-          <label class="f" style="flex:1;min-width:160px">Separación entre piezas
-            <select id="prjGap"><option value="0.15">15 cm</option><option value="0.3" selected>30 cm</option><option value="0.6">60 cm</option><option value="1">1 m</option></select></label>
+          <label class="f" style="flex:1;min-width:150px">Disposición
+            <select id="prjLayout"><option value="grupo" selected>En grupo</option><option value="escalonado">Escalonado</option><option value="fila">En fila</option></select></label>
+          <label class="f" style="flex:1;min-width:150px">Separación
+            <select id="prjGap"><option value="0.05">5 cm</option><option value="0.15" selected>15 cm</option><option value="0.3">30 cm</option><option value="0.6">60 cm</option></select></label>
         </div>
       </div>
       <div class="panel">
@@ -249,7 +252,7 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
         <div class="row">
           <button class="btn primary" id="prjAR">Ver en mi espacio</button>
           <a class="btn" href="#cotizacion">Cotizar</a>
-          <a class="btn" href="#catalogo">Agregar otra</a>
+          <a class="btn" href="#catalogo">+ Agregar maceta</a>
         </div>
         <div id="prjArInfo"></div>
       </div>
@@ -315,7 +318,7 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
 <nav class="bar" aria-label="Secciones">
   <div class="in">
     <a href="#catalogo" data-v="catalogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 8h12l-1.6 12H7.6z"/><path d="M5 5h14v3H5z"/></svg>Catálogo</a>
-    <a href="#proyecto" data-v="proyecto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M5 20l1-7h4l1 7"/><path d="M13 20l1-9h5l1 9"/></svg>Proyecto<span class="badge" id="navCount" hidden></span></a>
+    <a href="#proyecto" data-v="proyecto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M5 20l1-7h4l1 7"/><path d="M13 20l1-9h5l1 9"/></svg>Conjunto<span class="badge" id="navCount" hidden></span></a>
     <a href="#cotizacion" data-v="cotizacion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></svg>Cotizar</a>
     <a href="#taller" data-v="taller"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg>Taller</a>
   </div>
@@ -553,9 +556,24 @@ const exporter=new GLTFExporter();
 async function pieceGroup(it){const m=MODELS[it.m],s=m.sizes[it.s];const g=new THREE.Group();g.name=m.name+' '+s.k;
   const pot=await potGroup(m,s,FINISHES[it.f].id);g.add(pot);const pl=plantGroup(PLANTS[it.p].id);if(pl){pl.position.y=pot.userData.soilY;g.add(pl)}
   g.userData.w=s.d/100;return g}
-async function sceneFor(items,gap){const root=new THREE.Group();root.name='proyecto';let x=0;const parts=await Promise.all(items.map(pieceGroup));
-  const total=parts.reduce((a,p)=>a+p.userData.w,0)+gap*(parts.length-1);x=-total/2;
-  for(const p of parts){p.position.x=x+p.userData.w/2;x+=p.userData.w+gap;root.add(p)}return root}
+// Arma el conjunto: cada pieza se repite según su cantidad y se ordena con la disposición elegida.
+async function sceneFor(items,gap,layout='fila',qty=null){const root=new THREE.Group();root.name='conjunto';
+  const list=[];items.forEach((it,i)=>{for(let q=0;q<(qty?.[i]||1);q++)list.push(it)});
+  const parts=await Promise.all(list.map(pieceGroup));
+  parts.forEach((p,i)=>{p.userData.r=p.userData.w/2;p.userData.h=MODELS[list[i].m].sizes[list[i].s].h/100});
+  const pos=[];
+  if(layout==='fila'||parts.length<2){let x=0;parts.forEach(p=>{pos.push([x+p.userData.r,0]);x+=p.userData.w+gap})}
+  else if(layout==='escalonado'){const ord=parts.map((p,i)=>i).sort((a,b)=>parts[b].userData.h-parts[a].userData.h);
+    const dir=[Math.cos(-0.6),Math.sin(-0.6)];let t=0;ord.forEach((i,k)=>{const r=parts[i].userData.r;if(k)t+=r;pos[i]=[dir[0]*t,-dir[1]*t];t+=r+gap})}
+  else{ // grupo: la más alta atrás, las demás alrededor y hacia el frente, sin chocar
+    const ord=parts.map((p,i)=>i).sort((a,b)=>parts[b].userData.h-parts[a].userData.h);const placed=[];
+    ord.forEach((i,k)=>{const r=parts[i].userData.r;if(!k){pos[i]=[0,0];placed.push([0,0,r]);return}
+      let best=null;for(let a=0;a<360;a+=10){const ang=a*Math.PI/180;for(let d=0;d<4;d+=.02){const x=Math.sin(ang)*d,z=Math.cos(ang)*d;
+        if(z>-.05&&placed.every(([px,pz,pr])=>Math.hypot(x-px,z-pz)>=pr+r+gap*.5)){const score=d-z*.2;if(!best||score<best[0])best=[score,x,z];break}}}
+      pos[i]=[best[1],best[2]];placed.push([best[1],best[2],r])})}
+  let minX=1e9,maxX=-1e9,minZ=1e9,maxZ=-1e9;parts.forEach((p,i)=>{const r=p.userData.r;minX=Math.min(minX,pos[i][0]-r);maxX=Math.max(maxX,pos[i][0]+r);minZ=Math.min(minZ,pos[i][1]-r);maxZ=Math.max(maxZ,pos[i][1]+r)});
+  const cx=(minX+maxX)/2,cz=(minZ+maxZ)/2;parts.forEach((p,i)=>{p.position.set(pos[i][0]-cx,0,pos[i][1]-cz);root.add(p)});
+  root.userData.size=[maxX-minX,maxZ-minZ];return root}
 async function toGLB(obj){const buf=await exporter.parseAsync(obj,{binary:true,maxTextureSize:1024});return URL.createObjectURL(new Blob([buf],{type:'model/gltf-binary'}))}
 
 /* Miniaturas */
@@ -569,7 +587,7 @@ function swatchURL(id){const cv=finishCanvas(id),c=document.createElement('canva
 
 /* ---------------- Estado ---------------- */
 const KEY='guablid-ar-v1';
-const state={items:[],draft:{m:0,s:1,f:0,p:1},edit:null,gap:.3,catType:'todas',plCat:'todas',qty:[]};
+const state={items:[],draft:{m:0,s:1,f:0,p:0},edit:null,gap:.15,layout:'grupo',catType:'todas',plCat:'todas',qty:[]};
 function save(){try{localStorage.setItem(KEY,JSON.stringify({items:state.items,qty:state.qty}))}catch(e){}}
 function load(){
   const q=new URLSearchParams(location.search).get('p');
@@ -590,7 +608,7 @@ function route(){let v=(location.hash||'#catalogo').slice(1);if(!VIEWS.includes(
   document.querySelectorAll('nav.bar a').forEach(a=>a.toggleAttribute('aria-current',a.dataset.v===v||(v==='configurar'&&a.dataset.v==='catalogo')));
   document.querySelectorAll('nav.bar a').forEach(a=>{if(a.hasAttribute('aria-current'))a.setAttribute('aria-current','page')});
   if(v==='configurar')renderCfg(true);if(v==='proyecto')renderPrj();if(v==='cotizacion')renderQuote();window.scrollTo(0,0)}
-function counts(){const n=state.qty.reduce((a,b)=>a+b,0);const b=$('#navCount');b.hidden=!state.items.length;b.textContent=n;$('#topCount').textContent=state.items.length?`${n} pieza${n>1?'s':''} en el proyecto`:''}
+function counts(){const n=state.qty.reduce((a,b)=>a+b,0);const b=$('#navCount');b.hidden=!state.items.length;b.textContent=n;$('#topCount').textContent=state.items.length?`${n} pieza${n>1?'s':''} en el conjunto`:''}
 
 /* Catálogo */
 const thumbs={};
@@ -608,21 +626,21 @@ function arBlock(el,mv){el.innerHTML='';if(mv.canActivateAR)return;
   el.appendChild(wrap);try{new QRCode(wrap.querySelector('.qr'),{text:link,width:240,height:240,colorDark:'#1B211F',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.L})}catch(e){wrap.querySelector('.qr').remove()}}
 function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   $('#cfgName').textContent=pieceName(d.m,d.s);$('#cfgSizesBlock').hidden=m.sizes.length<2;$('#cfgDesc').textContent=m.desc;$('#cfgDims').textContent=dimsTxt(m,s);
-  $('#cfgEditing').textContent=state.edit!=null?'Editando pieza del proyecto':'';$('#cfgAdd').textContent=state.edit!=null?'Guardar cambios':'Agregar al proyecto';
+  $('#cfgEditing').textContent=state.edit!=null?'Editando pieza del proyecto':'';$('#cfgAdd').textContent=state.edit!=null?'Guardar cambios':'Agregar al conjunto';
   const sz=$('#cfgSizes');sz.innerHTML='';m.sizes.forEach((x,i)=>{const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',i===d.s);b.innerHTML=`<span class="k">${x.k}</span><span class="v">${dimsTxt(m,x)}</span>`;b.onclick=()=>{d.s=i;renderCfg()};sz.appendChild(b)});
   const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.sw||(f.sw=swatchURL(f.id))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
   $('#cfgFinName').textContent=FINISHES[d.f].name;$('#cfgPlName').textContent=PLANTS[d.p].name+(d.p?` · ${Math.round(PLANTS[d.p].h*100)} cm aprox.`:'');
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
   const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(state.plCat!=='todas'&&p.cat!==state.plCat&&p.id!=='none')return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
-    b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint">—</span>':`<img alt="" src="${thumbs['p'+i]}">`}</div><b>${p.name}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
+    b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${thumbs['p'+i]}">`}</div><b>${p.name}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
   $('#cfgPrice').textContent=money(unit(d));
   const sb=$('#cfgSet');sb.hidden=m.sizes.length<2||state.edit!=null;sb.textContent=`Agregar set de ${m.sizes.length} (${m.sizes.map(x=>x.k).join(' + ')})`;
   clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url;$('#cfgBusy').hidden=true},full?0:120)}
 $('#cfgBack').onclick=()=>location.hash=state.edit!=null?'proyecto':'catalogo';
-$('#cfgAdd').onclick=()=>{const it={...state.draft};if(state.edit!=null){state.items[state.edit]=it;toast('Pieza actualizada')}else{if(state.example){state.items=[];state.qty=[];state.example=false}state.items.push(it);state.qty.push(1);toast('Agregada al proyecto')}
+$('#cfgAdd').onclick=()=>{const it={...state.draft};if(state.edit!=null){state.items[state.edit]=it;toast('Pieza actualizada')}else{if(state.example){state.items=[];state.qty=[];state.example=false}state.items.push(it);state.qty.push(1);toast('Agregada al conjunto')}
   state.edit=null;save();counts();location.hash='proyecto'};
 $('#cfgSet').onclick=()=>{const d=state.draft,m=MODELS[d.m];if(state.example){state.items=[];state.qty=[];state.example=false}
-  m.sizes.forEach((_,k)=>{state.items.push({m:d.m,s:k,f:d.f,p:k===m.sizes.length-1?d.p:0});state.qty.push(1)});save();counts();toast(`Set ${m.name} agregado al proyecto`);location.hash='proyecto'};
+  m.sizes.forEach((_,k)=>{state.items.push({m:d.m,s:k,f:d.f,p:k===m.sizes.length-1?d.p:0});state.qty.push(1)});save();counts();toast(`Set ${m.name} agregado al conjunto`);location.hash='proyecto'};
 $('#cfgAR').onclick=()=>activate($('#mvCfg'),$('#cfgArInfo'));
 $('#mvCfg').addEventListener('load',()=>arBlock($('#cfgArInfo'),$('#mvCfg')));
 
@@ -633,15 +651,16 @@ let prjURL;
 async function renderPrj(){const L=$('#prjList');L.innerHTML='';
   if(!state.items.length){L.innerHTML=`<div class="empty"><h2>Aún no hay piezas</h2><p class="hint">Elige un modelo en el catálogo, configúralo y agrégalo aquí. Puedes combinar varias macetas y plantas en un mismo espacio.</p><a class="btn primary" href="#catalogo">Ir al catálogo</a></div>`;$('#prjAR').disabled=true;$('#mvPrj').src='';return}
   $('#prjAR').disabled=false;
-  if(state.example){const n=document.createElement('p');n.className='warnbox';n.innerHTML='<b>Proyecto de ejemplo</b><span>Al agregar tu primera pieza, este ejemplo se reemplaza.</span>';L.appendChild(n)}
+  if(state.example){const n=document.createElement('p');n.className='warnbox';n.innerHTML='<b>Conjunto de ejemplo</b><span>Al agregar tu primera pieza, este ejemplo se reemplaza.</span>';L.appendChild(n)}
   const box=document.createElement('div');box.className='items';
   for(const [i,it] of state.items.entries()){const key='i'+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),200,200);
     const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${pieceName(it.m,it.s)} · ${money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
     r.querySelector('[data-e]').onclick=()=>{state.draft={...it};state.edit=i;location.hash='configurar'};
     r.querySelector('[data-x]').onclick=()=>{state.items.splice(i,1);state.qty.splice(i,1);state.example=false;save();counts();renderPrj()};box.appendChild(r)}
   L.appendChild(box);
-  $('#prjBusy').hidden=false;const url=await toGLB(await sceneFor(state.items,state.gap));if(prjURL)URL.revokeObjectURL(prjURL);prjURL=url;$('#mvPrj').src=url;$('#prjBusy').hidden=true}
+  $('#prjBusy').hidden=false;const sc=await sceneFor(state.items,state.gap,state.layout,state.qty);const [sw,sd]=sc.userData.size;$('#prjDims').textContent=`Ocupa ${Math.round(sw*100)} × ${Math.round(sd*100)} cm`;const url=await toGLB(sc);if(prjURL)URL.revokeObjectURL(prjURL);prjURL=url;$('#mvPrj').src=url;$('#prjBusy').hidden=true}
 $('#prjGap').onchange=e=>{state.gap=+e.target.value;renderPrj()};
+$('#prjLayout').onchange=e=>{state.layout=e.target.value;renderPrj()};
 $('#prjAR').onclick=()=>activate($('#mvPrj'),$('#prjArInfo'));
 $('#mvPrj').addEventListener('load',()=>arBlock($('#prjArInfo'),$('#mvPrj')));
 
