@@ -452,9 +452,11 @@ function finishMat(id){if(matCache[id])return matCache[id];const f=FINISHES.find
 const loader=new GLTFLoader();loader.setMeshoptDecoder(MeshoptDecoder);
 const potCache={};
 // Dentro de Claude los modelos viajan como texto base64 (.txt); en un sitio propio se leen los .glb directamente.
+// Si la página se abre sin barra final (guablid.com/espacio), los modelos se buscan dentro de esa carpeta.
+const MBASE=(location.pathname.endsWith('/')||/\.html?$/.test(location.pathname))?'modelos/':location.pathname.split('/').pop()+'/modelos/';
 async function loadGLB(file){let buf;
-  try{const r=await fetch('modelos/'+file);if(!r.ok)throw 0;buf=await r.arrayBuffer();if(buf.byteLength<12||new TextDecoder().decode(new Uint8Array(buf,0,4))!=='glTF')throw 0}
-  catch(e){const r=await fetch('modelos/'+file.replace(/\.glb$/,'.txt'));if(!r.ok)throw new Error('No se encontró el modelo '+file);const b64=(await r.text()).trim();const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);buf=u.buffer}
+  try{const r=await fetch(MBASE+file);if(!r.ok)throw 0;buf=await r.arrayBuffer();if(buf.byteLength<12||new TextDecoder().decode(new Uint8Array(buf,0,4))!=='glTF')throw 0}
+  catch(e){const r=await fetch(MBASE+file.replace(/\.glb$/,'.txt'));if(!r.ok)throw new Error('No se encontró el modelo '+file);const b64=(await r.text()).trim();const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);buf=u.buffer}
   return await loader.parseAsync(buf,'')}
 function toFloat(attr){const n=attr.itemSize,f=new Float32Array(attr.count*n),G=['getX','getY','getZ','getW'];for(let i=0;i<attr.count;i++)for(let k=0;k<n;k++)f[i*n+k]=attr[G[k]](i);return new THREE.BufferAttribute(f,n)}
 async function loadPot(file){if(potCache[file])return potCache[file];
