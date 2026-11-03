@@ -672,7 +672,7 @@ $('#mvUp').addEventListener('load',()=>{const mv=$('#mvUp');try{const d=mv.getDi
 
 /* ---------------- Inicio ---------------- */
 async function boot(){load();
-  await new Promise(r=>requestAnimationFrame(()=>setTimeout(r,30)));
+  await new Promise(r=>setTimeout(r,30));
   await Promise.all(MODELS.map(async(m,i)=>{thumbs['m'+i]=thumb(await pieceGroup({m:i,s:defSize(i),f:0,p:0}))}));
   PLANTS.forEach((p,i)=>{if(p.id!=='none'){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
   $('#boot').remove();renderCatalog();counts();
