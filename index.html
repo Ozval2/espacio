@@ -110,6 +110,7 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;background:transp
 .pl .img img{width:100%;height:100%;object-fit:contain}
 .pl b{font-size:12.5px;line-height:1.2;padding-inline:3px;font-weight:600}
 .pl i{font-style:normal;font-family:var(--f-mono);font-size:11px;color:var(--muted);padding-inline:3px}
+.pl b .real{display:inline-block;font-family:var(--f-mono);font-size:10px;font-weight:500;color:var(--accent);background:var(--accent-soft);padding:0 5px;border-radius:3px;margin-left:2px;vertical-align:1px}
 .pl[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .sum{display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-top:1px solid var(--line);padding-top:14px}
 .sum .price{font-family:var(--f-display);font-stretch:112%;font-weight:750;font-size:26px}
@@ -386,8 +387,16 @@ const PLANTS = [
   {id:'olivo', name:'Olivo', cat:'arboles', h:1.8, p:120},
   {id:'agave', name:'Agave', cat:'suculentas', h:.6, p:28},
   {id:'cactus', name:'Cactus columnar', cat:'suculentas', h:1.2, p:40},
+  // Plantas realistas escaneadas (Poly Haven, licencia CC0)
+  {id:'anturio', name:'Anturio', cat:'interior', h:.47, p:28, real:'anturio.glb'},
+  {id:'calathea', name:'Calathea', cat:'interior', h:.42, p:26, real:'calathea.glb'},
+  {id:'helecho', name:'Helecho', cat:'interior', h:.43, p:18, real:'helecho.glb'},
+  {id:'pachira', name:'Pachira (árbol del dinero)', cat:'interior', h:1.15, p:45, real:'pachira.glb'},
+  {id:'suculenta-real', name:'Suculenta', cat:'suculentas', h:.25, p:12, real:'suculenta.glb'},
+  {id:'othonna', name:'Suculenta arbustiva', cat:'suculentas', h:.96, p:35, real:'othonna.glb'},
+  {id:'arbol', name:'Árbol ornamental', cat:'arboles', h:2.4, p:150, real:'arbol.glb'},
 ];
-const PCATS = [['todas','Todas'],['interior','Interior'],['exterior','Exterior'],['arboles','Árboles'],['suculentas','Suculentas']];
+const PCATS = [['todas','Todas'],['realistas','Realistas'],['interior','Interior'],['exterior','Exterior'],['arboles','Árboles'],['suculentas','Suculentas']];
 const CLIENT = {final:{n:'Cliente final',d:0}, pro:{n:'Arquitecto o paisajista',d:.15}, tienda:{n:'Tienda de diseño',d:.25}, fora:{n:'FORA',d:.30}};
 const IVA = .15;
 
@@ -468,9 +477,9 @@ const potCache={};
 // Dentro de Claude los modelos viajan como texto base64 (.txt); en un sitio propio se leen los .glb directamente.
 // Si la página se abre sin barra final (guablid.com/espacio), los modelos se buscan dentro de esa carpeta.
 const MBASE=(location.pathname.endsWith('/')||/\.html?$/.test(location.pathname))?'modelos/':location.pathname.split('/').pop()+'/modelos/';
-async function loadGLB(file){let buf;
-  try{const r=await fetch(MBASE+file);if(!r.ok)throw 0;buf=await r.arrayBuffer();if(buf.byteLength<12||new TextDecoder().decode(new Uint8Array(buf,0,4))!=='glTF')throw 0}
-  catch(e){const r=await fetch(MBASE+file.replace(/\.glb$/,'.txt'));if(!r.ok)throw new Error('No se encontró el modelo '+file);const b64=(await r.text()).trim();const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);buf=u.buffer}
+async function loadGLB(file,dir){let buf;const BASE=dir?MBASE.replace(/modelos\/$/,dir+'/'):MBASE;
+  try{const r=await fetch(BASE+file);if(!r.ok)throw 0;buf=await r.arrayBuffer();if(buf.byteLength<12||new TextDecoder().decode(new Uint8Array(buf,0,4))!=='glTF')throw 0}
+  catch(e){const r=await fetch(BASE+file.replace(/\.glb$/,'.txt'));if(!r.ok)throw new Error('No se encontró el modelo '+file);const b64=(await r.text()).trim();const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);buf=u.buffer}
   return await loader.parseAsync(buf,'')}
 function toFloat(attr){const n=attr.itemSize,f=new Float32Array(attr.count*n),G=['getX','getY','getZ','getW'];for(let i=0;i<attr.count;i++)for(let k=0;k<n;k++)f[i*n+k]=attr[G[k]](i);return new THREE.BufferAttribute(f,n)}
 async function loadPot(file){if(potCache[file])return potCache[file];
@@ -560,12 +569,18 @@ const PLANT_BUILD={
     b.add(new THREE.CapsuleGeometry(R*.65,H*.18,4,10),c,trs(new THREE.Vector3(-.15,H*.68,0),new THREE.Quaternion()));return b},
 };
 const plantCache={};
+// Plantas realistas: se cargan solo al elegirlas; las hojas con transparencia se exportan en PNG para no perderla.
+const realCache={};
+function realPlant(p){return realCache[p.id]||(realCache[p.id]=loadGLB(p.real,'plantas').then(gl=>{const g=gl.scene;g.name='planta-'+p.id;
+  g.traverse(o=>{if(!o.isMesh)return;const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>{const alpha=m.transparent||m.alphaTest>0;if(m.transparent){m.transparent=false;m.alphaTest=.5;m.depthWrite=true}m.side=THREE.DoubleSide;
+    ['map','normalMap','roughnessMap','metalnessMap','aoMap'].forEach(k=>{if(m[k])m[k].userData.mimeType=(k==='map'&&alpha)?'image/png':'image/jpeg'})})});return g}))}
+async function plantGroupAsync(id){const p=PLANTS.find(p=>p.id===id);if(p&&p.real)return (await realPlant(p)).clone();return plantGroup(id)}
 function plantGroup(id){if(id==='none')return null;if(!plantCache[id]){const p=PLANTS.find(p=>p.id===id);plantCache[id]=PLANT_BUILD[id](p.h,rng(hashStr(id))).group('planta-'+id)}return plantCache[id].clone()}
 
 /* ---------------- Escena y exportación GLB ---------------- */
 const exporter=new GLTFExporter();
 async function pieceGroup(it){const m=MODELS[it.m],s=m.sizes[it.s];const g=new THREE.Group();g.name=m.name+' '+s.k;
-  const pot=await potGroup(m,s,FINISHES[it.f].id);g.add(pot);const pl=plantGroup(PLANTS[it.p].id);if(pl){pl.position.y=pot.userData.soilY;g.add(pl)}
+  const pot=await potGroup(m,s,FINISHES[it.f].id);g.add(pot);const pl=await plantGroupAsync(PLANTS[it.p].id);if(pl){pl.position.y=pot.userData.soilY;g.add(pl)}
   g.userData.w=s.d/100;return g}
 // Arma el conjunto: cada pieza se repite según su cantidad y se ordena con la disposición elegida.
 async function sceneFor(items,gap,layout='fila',qty=null){const root=new THREE.Group();root.name='conjunto';
@@ -642,8 +657,8 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.photo?TBASE()+'sw-'+f.photo+'.jpg':(f.sw||(f.sw=swatchURL(f.id)))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
   $('#cfgFinName').textContent=FINISHES[d.f].name;$('#cfgPlName').textContent=PLANTS[d.p].name+(d.p?` · ${Math.round(PLANTS[d.p].h*100)} cm aprox.`:'');
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
-  const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(state.plCat!=='todas'&&p.cat!==state.plCat&&p.id!=='none')return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
-    b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${thumbs['p'+i]}">`}</div><b>${p.name}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
+  const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(p.id!=='none'&&state.plCat!=='todas'&&(state.plCat==='realistas'?!p.real:p.cat!==state.plCat))return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
+    b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${p.real?MBASE.replace(/modelos\/$/,'plantas/')+'th-'+p.id+'.png':thumbs['p'+i]}">`}</div><b>${p.name}${p.real?' <span class="real">realista</span>':''}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
   $('#cfgPrice').textContent=money(unit(d));
   const sb=$('#cfgSet');sb.hidden=m.sizes.length<2||state.edit!=null;sb.textContent=`Agregar set de ${m.sizes.length} (${m.sizes.map(x=>x.k).join(' + ')})`;
   clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url;$('#cfgBusy').hidden=true},full?0:120)}
@@ -713,7 +728,7 @@ $('#mvUp').addEventListener('load',()=>{const mv=$('#mvUp');try{const d=mv.getDi
 async function boot(){load();
   await new Promise(r=>setTimeout(r,30));
   await Promise.all(MODELS.flatMap((m,i)=>m.sizes.map(async(_,k)=>{thumbs['m'+i+'-'+k]=thumb(await pieceGroup({m:i,s:k,f:0,p:0}))})));
-  PLANTS.forEach((p,i)=>{if(p.id!=='none'){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
+  PLANTS.forEach((p,i)=>{if(p.id!=='none'&&!p.real){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
   $('#boot').remove();renderCatalog();counts();
   if(state.shared&&!location.hash)location.hash='proyecto';
   window.addEventListener('hashchange',route);route()}
