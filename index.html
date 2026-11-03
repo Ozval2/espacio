@@ -187,7 +187,7 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
     </div>
     <div class="chips" id="catFilters" role="group" aria-label="Filtrar por tipo"></div>
     <div class="grid" id="catGrid"></div>
-    <p class="note">Modelos y medidas reales del taller. Precios de prueba. Los acabados son texturas de referencia hasta cargar las fotos reales de las piezas; “Original del modelo” muestra la pieza tal como viene en el archivo 3D.</p>
+    <p class="note">Modelos y medidas reales del taller. Precios de prueba. Los acabados salen de fotos reales de piezas terminadas; Vitrificado negro y Antique aún son de referencia. “Original del modelo” muestra la pieza tal como viene en el archivo 3D.</p>
   </section>
 
   <!-- CONFIGURAR -->
@@ -359,13 +359,19 @@ const MODELS = [
 const TYPES = [['todas','Todas'],['set','Sets'],['alta','Altas'],['baja','Bajas']];
 const FINISHES = [
   {id:'original', name:'Original del modelo', mult:1, rough:.9},
-  {id:'coral', name:'Coral', mult:1, rough:.92},
-  {id:'recife', name:'Recife', mult:1.05, rough:.9},
-  {id:'mediterraneo', name:'Mediterráneo', mult:1.1, rough:.85},
-  {id:'antique', name:'Antique', mult:1.05, rough:.88},
-  {id:'vit-verde', name:'Vitrificado verde Teresa', mult:1.25, rough:.18},
-  {id:'vit-negro', name:'Vitrificado negro', mult:1.25, rough:.16},
-  {id:'vit-azul', name:'Vitrificado azul camaleón', mult:1.25, rough:.18},
+  {id:'coral-beige', name:'Coral beige', mult:1, rough:.95, photo:'coral-beige', grp:'Coral'},
+  {id:'coral-arena', name:'Coral arena', mult:1, rough:.95, photo:'coral-arena', grp:'Coral'},
+  {id:'coral-gris', name:'Coral gris', mult:1, rough:.95, photo:'coral-gris', grp:'Coral'},
+  {id:'coral-gris-blanco', name:'Coral gris con blanco', mult:1, rough:.95, photo:'coral-gris-blanco', grp:'Coral'},
+  {id:'recife', name:'Recife', mult:1.05, rough:.9, photo:'recife', grp:'Recife'},
+  {id:'recife-reagente', name:'Recife con reagente', mult:1.1, rough:.9, photo:'recife-reagente', grp:'Recife'},
+  {id:'recife-oxido', name:'Recife óxido', mult:1.1, rough:.9, photo:'recife-oxido', grp:'Recife'},
+  {id:'mediterraneo', name:'Mediterráneo', mult:1.1, rough:.9, photo:'mediterraneo', grp:'Mediterráneo'},
+  {id:'mediterraneo-azul', name:'Mediterráneo azul', mult:1.1, rough:.9, photo:'mediterraneo-azul', grp:'Mediterráneo'},
+  {id:'vit-verde', name:'Vitrificado verde Teresa', mult:1.25, rough:.22, photo:'vit-verde', grp:'Vitrificado'},
+  {id:'vit-azul', name:'Vitrificado azul camaleón', mult:1.25, rough:.22, photo:'vit-azul', grp:'Vitrificado'},
+  {id:'vit-negro', name:'Vitrificado negro (referencia)', mult:1.25, rough:.16, grp:'Vitrificado'},
+  {id:'antique', name:'Antique (referencia)', mult:1.05, rough:.88},
 ];
 const PLANTS = [
   {id:'none', name:'Sin planta', cat:'todas', h:0, p:0},
@@ -445,6 +451,11 @@ const PAINT = {
 };
 const texCache = {};
 function finishCanvas(id){if(texCache[id])return texCache[id];const f=FINISHES.find(f=>f.id===id);texCache[id]=f.canvas||PAINT[id]();return texCache[id]}
+// Texturas fotográficas: se descargan solo cuando alguien elige ese acabado.
+const TBASE=()=>MBASE.replace(/modelos\/$/,'texturas/');
+const finLoading={};
+function ensureFinish(id){const f=FINISHES.find(f=>f.id===id);if(!f||!f.photo||f.canvas)return Promise.resolve();
+  return finLoading[id]||(finLoading[id]=new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=im.naturalWidth;c.getContext('2d').drawImage(im,0,0);f.canvas=c;res()};im.onerror=()=>rej(new Error('No se pudo cargar la textura '+f.name));im.src=TBASE()+f.photo+'.jpg'}))}
 const soilCanvas=(()=>{let c;return()=>{if(c)return c;const n=fbm(7,8,4);c=pixels((u,v)=>mix(hex('#2B211B'),hex('#4A3A2E'),n(u,v))).c;return c}})();
 function canvasTex(cv){const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.userData.mimeType='image/jpeg';t.anisotropy=4;return t}
 const matCache={};
@@ -479,7 +490,7 @@ async function loadPot(file){if(potCache[file])return potCache[file];
     if(rIn===1e9)rIn=.1;return {parts,soilY,rIn:rIn*.97}})();
   return potCache[file]}
 let soilMat;
-async function potGroup(model,s,finishId){const d=await loadPot(s.file);const g=new THREE.Group();
+async function potGroup(model,s,finishId){const d=await loadPot(s.file);if(finishId!=='original')await ensureFinish(finishId);const g=new THREE.Group();
   d.parts.forEach((p,i)=>{const mat=(finishId==='original'||p.interior)?p.orig:finishMat(finishId);const mesh=new THREE.Mesh(p.geo,mat);mesh.name='maceta-'+i;g.add(mesh)});
   const sg=new THREE.CircleGeometry(d.rIn,48);sg.rotateX(-Math.PI/2);sg.translate(0,d.soilY,0);
   if(!soilMat)soilMat=new THREE.MeshStandardMaterial({map:canvasTex(soilCanvas()),roughness:1,name:'tierra'});
@@ -628,7 +639,7 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   $('#cfgName').textContent=pieceName(d.m,d.s);$('#cfgSizesBlock').hidden=m.sizes.length<2;$('#cfgDesc').textContent=m.desc;$('#cfgDims').textContent=dimsTxt(m,s);
   $('#cfgEditing').textContent=state.edit!=null?'Editando pieza del proyecto':'';$('#cfgAdd').textContent=state.edit!=null?'Guardar cambios':'Agregar al conjunto';
   const sz=$('#cfgSizes');sz.innerHTML='';m.sizes.forEach((x,i)=>{const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',i===d.s);b.innerHTML=`<span class="k">${x.k}</span><span class="v">${dimsTxt(m,x)}</span>`;b.onclick=()=>{d.s=i;renderCfg()};sz.appendChild(b)});
-  const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.sw||(f.sw=swatchURL(f.id))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
+  const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.photo?TBASE()+'sw-'+f.photo+'.jpg':(f.sw||(f.sw=swatchURL(f.id)))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
   $('#cfgFinName').textContent=FINISHES[d.f].name;$('#cfgPlName').textContent=PLANTS[d.p].name+(d.p?` · ${Math.round(PLANTS[d.p].h*100)} cm aprox.`:'');
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
   const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(state.plCat!=='todas'&&p.cat!==state.plCat&&p.id!=='none')return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
