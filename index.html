@@ -79,6 +79,7 @@ p{margin:0}
 .card .nm{font-family:var(--f-display);font-stretch:112%;font-weight:700;font-size:17px}
 .card .ms{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
 .card .pr{font-weight:600;font-size:14px;margin-top:4px}
+.card .set{align-self:flex-start;font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;color:var(--accent);background:var(--accent-soft);padding:1px 7px;border-radius:3px;margin-top:4px}
 
 /* Configurador */
 .cfg{display:grid;gap:20px}
@@ -208,7 +209,7 @@ nav.bar .badge{position:absolute;top:8px;left:calc(50% + 6px);background:var(--a
       </div>
       <div class="panel">
         <div class="head"><h2 id="cfgName"></h2><p class="lede" id="cfgDesc"></p></div>
-        <div class="block"><h3>Medida</h3><div class="sizes" id="cfgSizes"></div></div>
+        <div class="block" id="cfgSizesBlock"><h3>Piezas del mismo set</h3><div class="sizes" id="cfgSizes"></div></div>
         <div class="block"><h3>Acabado · <span id="cfgFinName" style="text-transform:none;letter-spacing:0;color:var(--ink)"></span></h3><div class="swatches" id="cfgFins"></div></div>
         <div class="block"><h3>Planta · <span id="cfgPlName" style="text-transform:none;letter-spacing:0;color:var(--ink)"></span></h3>
           <div class="chips" id="plFilters" role="group" aria-label="Filtrar plantas"></div>
@@ -577,7 +578,8 @@ function load(){
 const unit=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return Math.round(s.p*FINISHES[it.f].mult)+PLANTS[it.p].p};
 const dimsTxt=(m,s)=>`Ø${s.d} × ${s.h} cm`;
 const defSize=m=>Math.min(1,MODELS[m].sizes.length-1);
-const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${m.name} ${s.k} · ${dimsTxt(m,s)} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}`};
+const pieceName=(m,k)=>{const M=MODELS[m];return M.sizes.length>1?`${M.name} ${M.sizes[k].k}`:M.name};
+const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${pieceName(it.m,it.s)} · ${dimsTxt(m,s)} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}`};
 
 /* ---------------- Vistas ---------------- */
 const VIEWS=['catalogo','configurar','proyecto','cotizacion','taller'];
@@ -591,9 +593,10 @@ function counts(){const n=state.qty.reduce((a,b)=>a+b,0);const b=$('#navCount');
 /* Catálogo */
 const thumbs={};
 function renderCatalog(){const f=$('#catFilters');f.innerHTML='';TYPES.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.catType===k);b.onclick=()=>{state.catType=k;renderCatalog()};f.appendChild(b)});
-  const g=$('#catGrid');g.innerHTML='';MODELS.forEach((m,i)=>{if(state.catType!=='todas'&&!m.tags.includes(state.catType))return;const s=m.sizes[defSize(i)];
-    const c=document.createElement('button');c.className='card';c.innerHTML=`<div class="ph"><img alt="" src="${thumbs['m'+i]}"></div><div class="meta"><span class="nm">${m.name}</span><span class="ms">${m.sizes.length>1?m.sizes.map(s=>s.k).join(' · ')+' — ':''}${m.sizes.length>1?'desde ':''}${dimsTxt(m,m.sizes[0])}</span><span class="pr">desde ${money(m.sizes[0].p)}</span></div>`;
-    c.onclick=()=>{state.draft={m:i,s:defSize(i),f:state.draft.f,p:state.draft.p};state.edit=null;location.hash='configurar'};g.appendChild(c)})}
+  const g=$('#catGrid');g.innerHTML='';MODELS.forEach((m,i)=>{if(state.catType!=='todas'&&!m.tags.includes(state.catType))return;
+    m.sizes.forEach((s,k)=>{const c=document.createElement('button');c.className='card';
+      c.innerHTML=`<div class="ph"><img alt="" src="${thumbs['m'+i+'-'+k]}"></div><div class="meta"><span class="nm">${pieceName(i,k)}</span><span class="ms">${dimsTxt(m,s)}</span>${m.sizes.length>1?`<span class="set">Set de ${m.sizes.length}</span>`:''}<span class="pr">${money(s.p)}</span></div>`;
+      c.onclick=()=>{state.draft={m:i,s:k,f:state.draft.f,p:state.draft.p};state.edit=null;location.hash='configurar'};g.appendChild(c)})})}
 
 /* Configurador */
 let cfgTimer,cfgURL;
@@ -602,7 +605,7 @@ function arBlock(el,mv){el.innerHTML='';if(mv.canActivateAR)return;
   wrap.innerHTML=`<div class="qr" aria-hidden="true"></div><div style="display:flex;flex-direction:column;gap:6px;min-width:0"><b>Para verla en tu espacio, abre esta página en el celular</b><span class="hint">${inFrame?'Dentro de Claude la cámara está bloqueada. La realidad aumentada funciona cuando la página se publica en un sitio propio y se abre en Chrome (Android) o Safari (iPhone).':'Escanea el código con la cámara del celular. Funciona en Chrome para Android y Safari para iPhone.'}</span></div>`;
   el.appendChild(wrap);try{new QRCode(wrap.querySelector('.qr'),{text:link,width:240,height:240,colorDark:'#1B211F',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.L})}catch(e){wrap.querySelector('.qr').remove()}}
 function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
-  $('#cfgName').textContent=m.name;$('#cfgDesc').textContent=m.desc;$('#cfgDims').textContent=dimsTxt(m,s);
+  $('#cfgName').textContent=pieceName(d.m,d.s);$('#cfgSizesBlock').hidden=m.sizes.length<2;$('#cfgDesc').textContent=m.desc;$('#cfgDims').textContent=dimsTxt(m,s);
   $('#cfgEditing').textContent=state.edit!=null?'Editando pieza del proyecto':'';$('#cfgAdd').textContent=state.edit!=null?'Guardar cambios':'Agregar al proyecto';
   const sz=$('#cfgSizes');sz.innerHTML='';m.sizes.forEach((x,i)=>{const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',i===d.s);b.innerHTML=`<span class="k">${x.k}</span><span class="v">${dimsTxt(m,x)}</span>`;b.onclick=()=>{d.s=i;renderCfg()};sz.appendChild(b)});
   const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.sw||(f.sw=swatchURL(f.id))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
@@ -631,7 +634,7 @@ async function renderPrj(){const L=$('#prjList');L.innerHTML='';
   if(state.example){const n=document.createElement('p');n.className='warnbox';n.innerHTML='<b>Proyecto de ejemplo</b><span>Al agregar tu primera pieza, este ejemplo se reemplaza.</span>';L.appendChild(n)}
   const box=document.createElement('div');box.className='items';
   for(const [i,it] of state.items.entries()){const key='i'+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),200,200);
-    const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${MODELS[it.m].name} ${MODELS[it.m].sizes[it.s].k} · ${money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
+    const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${pieceName(it.m,it.s)} · ${money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
     r.querySelector('[data-e]').onclick=()=>{state.draft={...it};state.edit=i;location.hash='configurar'};
     r.querySelector('[data-x]').onclick=()=>{state.items.splice(i,1);state.qty.splice(i,1);state.example=false;save();counts();renderPrj()};box.appendChild(r)}
   L.appendChild(box);
@@ -677,7 +680,7 @@ $('#mvUp').addEventListener('load',()=>{const mv=$('#mvUp');try{const d=mv.getDi
 /* ---------------- Inicio ---------------- */
 async function boot(){load();
   await new Promise(r=>setTimeout(r,30));
-  await Promise.all(MODELS.map(async(m,i)=>{thumbs['m'+i]=thumb(await pieceGroup({m:i,s:defSize(i),f:0,p:0}))}));
+  await Promise.all(MODELS.flatMap((m,i)=>m.sizes.map(async(_,k)=>{thumbs['m'+i+'-'+k]=thumb(await pieceGroup({m:i,s:k,f:0,p:0}))})));
   PLANTS.forEach((p,i)=>{if(p.id!=='none'){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
   $('#boot').remove();renderCatalog();counts();
   if(state.shared&&!location.hash)location.hash='proyecto';
