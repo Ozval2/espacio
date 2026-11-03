@@ -1,0 +1,16 @@
+Cómo publicar la web de realidad aumentada (gratis, con GitHub Pages)
+
+Contenido de esta carpeta:
+- index.html: la página.
+- modelos/: los 12 modelos 3D del taller, ya optimizados para celular (3 MB en total).
+Ambos deben subirse juntos, respetando la carpeta "modelos".
+
+1. Entra a github.com con tu cuenta y crea un repositorio nuevo, por ejemplo "macetas-ar". Márcalo como público.
+2. Elige "Add file" > "Upload files" y arrastra index.html y la carpeta modelos completa. Confirma con "Commit changes".
+3. Ve a Settings > Pages. En "Branch" elige "main" y la carpeta "/ (root)". Guarda.
+4. En uno o dos minutos aparece la dirección, con esta forma:
+   https://TU-USUARIO.github.io/macetas-ar/
+5. Abre esa dirección en tu celular (Chrome en Android o Safari en iPhone), elige una maceta y toca "Ver en mi espacio".
+
+Para agregar un modelo nuevo, súbelo a la carpeta modelos y pídele a Claude que lo sume al catálogo.
+El botón "Copiar enlace del proyecto" genera un enlace que abre exactamente las macetas que armaste: ese es el que le mandas al cliente.
