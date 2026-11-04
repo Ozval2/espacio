@@ -187,6 +187,12 @@ nav.bar .badge{position:absolute;top:9px;left:calc(50% + 7px);background:var(--a
 .ar-cart b{font-weight:400;background:var(--claro);color:var(--fondo);border-radius:999px;padding:6px 10px}
 .ar-cart.ok b{background:var(--acento)}
 model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="object-placed"] .ar-cart{display:inline-flex}
+.stock{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;margin-top:6px}
+.stock::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.stock.ok{color:#9DBF95}
+.stock.pedido{color:var(--acento)}
+.stock.blk{display:flex}
+.stock.mini{font-size:9.5px;letter-spacing:.08em;margin-top:4px}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -244,7 +250,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
         <div class="block"><h3>Planta · <b id="cfgPlName"></b></h3>
           <div class="chips" id="plFilters" role="group" aria-label="Filtrar plantas"></div>
           <div class="plants" id="cfgPlants"></div></div>
-        <div class="sum"><span class="hint">Precio de prueba</span><span class="price mono" id="cfgPrice"></span></div>
+        <div class="sum"><span class="hint">Precio de prueba<span id="cfgStock"></span></span><span class="price mono" id="cfgPrice"></span></div>
         <div class="row">
           <button class="btn primary" id="cfgAdd">Agregar al conjunto</button>
           <button class="btn" id="cfgAR">Ver en mi espacio</button>
@@ -661,6 +667,24 @@ const sizesOf=(m,f)=>MODELS[m].sizes.map((s,k)=>({s,k})).filter(o=>formaOf(m,o.k
 const repSize=(m,f)=>{const l=sizesOf(m,f);return l[Math.min(1,l.length-1)].k};
 const formaName=(m,f)=>{const M=MODELS[m];if(formas(m).length<2)return M.name;const l=sizesOf(m,f);return M.name+' '+l.map(o=>o.s.k).join('/')};
 const pieceName=(m,k)=>{const M=MODELS[m];return M.sizes.length>1?`${M.name} ${M.sizes[k].k}`:M.name};
+/* ---------------- Inventario (Google Sheets publicado como CSV) ---------------- */
+// Solo se publica el estado ("Disponible" / "Bajo pedido"), nunca la cantidad.
+const INV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vRES9aZkdC7ymF_Y1-XRqSnCf2adkdnluN9T8hNm_FRKuPrzAGsa9Vq7c2ziIaknWqGsulrmeD1FXIl/pub?gid=160559192&single=true&output=csv';
+const PLAZO='3 a 4 semanas';
+const INV={};let invReady=false;
+const norm=t=>(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+const pieceCode=(m,k)=>norm(MODELS[m].id+'-'+MODELS[m].sizes[k].k);
+function parseCSV(t){const rows=[];let row=[],f='',q=false;for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"')q=true;else if(c===','){row.push(f);f=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f=''}else f+=c}
+  if(f||row.length){row.push(f);rows.push(row)}return rows}
+async function loadInventory(){if(!INV_URL)return;try{const r=await fetch(INV_URL+(INV_URL.includes('?')?'&':'?')+'t='+Math.floor(Date.now()/3e5),{cache:'no-store'});if(!r.ok)return;
+  parseCSV(await r.text()).slice(1).forEach(([c,a,e])=>{c=norm(c);e=(e||'').trim();if(!c||!e)return;(INV[c]=INV[c]||{})[norm(a)]=e});invReady=true}catch(e){}}
+// Estado de una pieza; si se indica acabado, se usa la fila de ese acabado y, si no hay, la general.
+function stockOf(m,k,finIdx){const r=INV[pieceCode(m,k)];if(!r)return null;const fn=finIdx!=null?norm(FINISHES[finIdx].name):'';
+  const e=(fn&&r[fn])||r['']||(fn?null:Object.values(r).find(v=>/^disp/i.test(v))||Object.values(r)[0]);return e?(/^disp/i.test(e)?'ok':'pedido'):null}
+const stockTxt=st=>st==='ok'?'Disponible':st==='pedido'?'Bajo pedido · '+PLAZO:'';
+const stockTag=(st,cls='')=>st?`<span class="stock ${st} ${cls}">${cls==='mini'||cls==='card'?(st==='ok'?'Disponible':'Bajo pedido'):stockTxt(st)}</span>`:'';
 const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${pieceName(it.m,it.s)} · ${dimsTxt(m,s)} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}`};
 
 /* ---------------- Vistas ---------------- */
@@ -681,7 +705,7 @@ function renderCatalog(){const f=$('#catFilters');f.innerHTML='';TYPES.forEach((
     fs.forEach(f=>{const l=sizesOf(i,f),k=repSize(i,f),c=document.createElement('button');c.className='card';
       const medidas=l.length>1?'Medidas '+l.map(o=>o.s.k).join(' · '):dimsTxt(m,l[0].s);
       const setTxt=n>1?(fs.length>1?`Set ${m.name} · ${n} piezas distintas`:`Set de ${n} medidas`):'';
-      c.innerHTML=`<div class="ph"><img alt="" src="${thumbs['m'+i+'-'+k]}"></div><div class="meta"><span class="nm">${formaName(i,f)}</span><span class="ms">${medidas}</span>${setTxt?`<span class="set">${setTxt}</span>`:''}<span class="pr">${l.length>1?'desde ':''}${money(Math.min(...l.map(o=>o.s.p)))}</span></div>`;
+      c.innerHTML=`<div class="ph"><img alt="" src="${thumbs['m'+i+'-'+k]}"></div><div class="meta"><span class="nm">${formaName(i,f)}</span><span class="ms">${medidas}</span>${setTxt?`<span class="set">${setTxt}</span>`:''}<span class="pr">${l.length>1?'desde ':''}${money(Math.min(...l.map(o=>o.s.p)))}</span>${(()=>{const sts=l.map(o=>stockOf(i,o.k)).filter(Boolean);return sts.length?stockTag(sts.includes('ok')?'ok':'pedido','card'):''})()}</div>`;
       c.onclick=()=>{state.draft={m:i,s:k,f:state.draft.f,p:state.draft.p};state.edit=null;location.hash='configurar'};grid.appendChild(c)})})}
 
 /* Configurador */
@@ -694,7 +718,7 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   $('#cfgName').textContent=pieceName(d.m,d.s);$('#cfgDesc').textContent=m.desc;$('#cfgDims').textContent=dimsTxt(m,s);
   $('#cfgEditing').textContent=state.edit!=null?'Editando pieza del proyecto':'';$('#cfgAdd').textContent=state.edit!=null?'Guardar cambios':'Agregar al conjunto';
   const fA=formaOf(d.m,d.s),same=sizesOf(d.m,fA);$('#cfgSizesBlock').hidden=same.length<2;
-  const sz=$('#cfgSizes');sz.innerHTML='';same.forEach(({s:x,k:i})=>{const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',i===d.s);b.innerHTML=`<span class="k">${x.k}</span><span class="v">${dimsTxt(m,x)}</span>`;b.onclick=()=>{d.s=i;renderCfg()};sz.appendChild(b)});
+  const sz=$('#cfgSizes');sz.innerHTML='';same.forEach(({s:x,k:i})=>{const b=document.createElement('button');b.className='opt';b.setAttribute('aria-pressed',i===d.s);b.innerHTML=`<span class="k">${x.k}</span><span class="v">${dimsTxt(m,x)}</span>${stockTag(stockOf(d.m,i,d.f),'mini')}`;b.onclick=()=>{d.s=i;renderCfg()};sz.appendChild(b)});
   const others=formas(d.m);$('#cfgSetBlock').hidden=others.length<2;$('#cfgSetTitle').textContent=`Las ${others.length} piezas del set ${m.name}`;
   const sl=$('#cfgSetList');sl.innerHTML='';others.forEach(f=>{const k=f===fA?d.s:repSize(d.m,f);const b=document.createElement('button');b.className='setp';b.setAttribute('aria-current',f===fA);b.innerHTML=`<img alt="" src="${thumbs['m'+d.m+'-'+k]}"><span>${pieceName(d.m,k)}<br><span class="hint">${dimsTxt(m,m.sizes[k])}</span></span>`;b.onclick=()=>{d.s=k;renderCfg()};sl.appendChild(b)});
   const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.photo?TBASE()+'sw-'+f.photo+'.jpg':(f.sw||(f.sw=swatchURL(f.id)))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
@@ -702,7 +726,7 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
   const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(p.id!=='none'&&state.plCat!=='todas'&&(state.plCat==='realistas'?!p.real:p.cat!==state.plCat))return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
     b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${p.real?MBASE.replace(/modelos\/$/,'plantas/')+'th-'+p.id+'.png':thumbs['p'+i]}">`}</div><b>${p.name}${p.real?' <span class="real">realista</span>':''}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
-  $('#cfgPrice').textContent=money(unit(d));$('#arCartPrice').textContent=money(unit(d));$('#arCartTxt').textContent='Agregar al carrito';
+  $('#cfgPrice').textContent=money(unit(d));$('#cfgStock').innerHTML=stockTag(stockOf(d.m,d.s,d.f),'blk');$('#arCartPrice').textContent=money(unit(d));$('#arCartTxt').textContent='Agregar al carrito';
   const sb=$('#cfgSet');sb.hidden=m.sizes.length<2||state.edit!=null;sb.textContent=`Agregar el set completo (${m.sizes.length} piezas)`;
   clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url+qlHash(d);$('#cfgBusy').hidden=true},full?0:120)}
 $('#cfgBack').onclick=()=>location.hash=state.edit!=null?'proyecto':'catalogo';
@@ -713,7 +737,7 @@ $('#cfgSet').onclick=()=>{const d=state.draft,m=MODELS[d.m];if(state.example){st
 // Carrito desde la cámara: en iPhone, Quick Look muestra un botón con nombre y precio (los datos viajan en el enlace del modelo);
 // en Android, el botón flotante de la cámara. Ambos agregan la pieza sin salir de la cámara.
 function qlHash(d){const e=encodeURIComponent,F=FINISHES[d.f],P=PLANTS[d.p];
-  return '#callToAction='+e('Agregar al carrito')+'&checkoutTitle='+e(pieceName(d.m,d.s))+'&checkoutSubtitle='+e(F.name+(d.p?' · '+P.name:''))+'&price='+e(money(unit(d)))}
+  return '#callToAction='+e('Agregar al carrito')+'&checkoutTitle='+e(pieceName(d.m,d.s))+'&checkoutSubtitle='+e(F.name+(d.p?' · '+P.name:'')+(stockOf(d.m,d.s,d.f)?' · '+stockTxt(stockOf(d.m,d.s,d.f)):''))+'&price='+e(money(unit(d)))}
 function addFromAR(){const it={...state.draft};if(state.example){state.items=[];state.qty=[];state.example=false}
   const i=state.items.findIndex(x=>x.m===it.m&&x.s===it.s&&x.f===it.f&&x.p===it.p);if(i>=0)state.qty[i]=(state.qty[i]||1)+1;else{state.items.push(it);state.qty.push(1)}
   save();counts();const b=$('#arCart');b.classList.add('ok');$('#arCartTxt').textContent='Agregado al carrito';setTimeout(()=>{b.classList.remove('ok');$('#arCartTxt').textContent='Agregar otra'},1800);toast(pieceName(it.m,it.s)+' agregada al carrito')}
@@ -750,12 +774,12 @@ function shareLink(){const base=location.href.split('#')[0].split('?')[0];return
 function quoteData(){const t=CLIENT[$('#qType').value];const lines=state.items.map((it,i)=>({it,q:state.qty[i]||1,u:unit(it)}));
   const sub=lines.reduce((a,l)=>a+l.u*l.q,0),desc=sub*t.d,base=sub-desc,iva=base*IVA;return {t,lines,sub,desc,base,iva,total:base+iva}}
 function quoteText(){const q=quoteData(),n=$('#qName').value.trim();let s=`Hola, quiero cotizar estas macetas${n?' para '+n:''}:\n\n`;
-  q.lines.forEach((l,i)=>s+=`${i+1}. ${itemLine(l.it)} — ${l.q} u × ${money2(l.u)} = ${money2(l.u*l.q)}\n`);
+  q.lines.forEach((l,i)=>{const st=stockOf(l.it.m,l.it.s,l.it.f);s+=`${i+1}. ${itemLine(l.it)}${st?' ('+stockTxt(st)+')':''} — ${l.q} u × ${money2(l.u)} = ${money2(l.u*l.q)}\n`});
   s+=`\nSubtotal: ${money2(q.sub)}`;if(q.desc)s+=`\nDescuento ${q.t.n} (${Math.round(q.t.d*100)} %): −${money2(q.desc)}`;s+=`\nIVA 15 %: ${money2(q.iva)}\nTotal: ${money2(q.total)}\n\nPrecios de prueba.`;
   if(!inFrame)s+=`\nVer el proyecto en 3D: ${shareLink()}`;return s}
 function renderQuote(){const T=$('#qTable');const q=quoteData();
   if(!state.items.length){T.innerHTML='<tbody><tr><td>No hay piezas en el proyecto. <a href="#catalogo">Ir al catálogo</a></td></tr></tbody>';}
-  else{T.innerHTML=`<thead><tr><th>Pieza</th><th>Cant.</th><th class="n">Total</th></tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td>${itemLine(l.it)}<br><span class="mono hint">${money2(l.u)} c/u</span></td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td><td class="n">${money2(l.u*l.q)}</td></tr>`).join('')}</tbody>
+  else{T.innerHTML=`<thead><tr><th>Pieza</th><th>Cant.</th><th class="n">Total</th></tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td>${itemLine(l.it)}<br><span class="mono hint">${money2(l.u)} c/u</span>${stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td><td class="n">${money2(l.u*l.q)}</td></tr>`).join('')}</tbody>
   <tfoot><tr><td colspan="2">Subtotal</td><td class="n">${money2(q.sub)}</td></tr>${q.desc?`<tr><td colspan="2">Descuento ${q.t.n} (${Math.round(q.t.d*100)} %)</td><td class="n">−${money2(q.desc)}</td></tr>`:''}<tr><td colspan="2">IVA 15 %</td><td class="n">${money2(q.iva)}</td></tr><tr class="tot"><td colspan="2">Total</td><td class="n">${money2(q.total)}</td></tr></tfoot>`;
   T.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const i=+b.dataset.d;state.qty[i]=Math.max(1,(state.qty[i]||1)-1);save();counts();renderQuote()});
   T.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const i=+b.dataset.u;state.qty[i]=(state.qty[i]||1)+1;save();counts();renderQuote()})}
@@ -779,11 +803,12 @@ $('#tGlb').onchange=e=>{const f=e.target.files[0];if(!f)return;const mv=$('#mvUp
 $('#mvUp').addEventListener('load',()=>{const mv=$('#mvUp');try{const d=mv.getDimensions();$('#tGlbDims').textContent=`${Math.round(d.x*100)} × ${Math.round(d.z*100)} × ${Math.round(d.y*100)} cm`}catch(e){}});
 
 /* ---------------- Inicio ---------------- */
-async function boot(){load();
+async function boot(){load();const invP=loadInventory();
   await new Promise(r=>setTimeout(r,30));
   await Promise.all(MODELS.flatMap((m,i)=>m.sizes.map(async(_,k)=>{thumbs['m'+i+'-'+k]=thumb(await pieceGroup({m:i,s:k,f:0,p:0}))})));
   PLANTS.forEach((p,i)=>{if(p.id!=='none'&&!p.real){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
   $('#boot').remove();renderCatalog();counts();
+  invP.then(()=>{if(!invReady)return;renderCatalog();const v=(location.hash||'#catalogo').slice(1);if(v==='configurar')renderCfg();if(v==='cotizacion')renderQuote()});
   if(state.shared&&!location.hash)location.hash='proyecto';
   window.addEventListener('hashchange',route);route()}
 boot().catch(e=>{$('#boot').textContent='No se pudieron preparar los modelos 3D: '+e.message;console.error(e)});
