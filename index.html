@@ -183,6 +183,10 @@ nav.bar a[aria-current="page"]::before{content:"";position:absolute;top:0;left:3
 nav.bar .badge{position:absolute;top:9px;left:calc(50% + 7px);background:var(--acento);color:var(--fondo);font-size:10px;font-weight:500;letter-spacing:0;border-radius:999px;min-width:17px;height:17px;display:grid;place-items:center;padding:0 4px}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 16px);background:var(--claro);color:var(--fondo);padding:11px 18px;border-radius:2px;font-size:14px;z-index:20;max-width:calc(100% - 32px)}
 .loading{display:grid;place-items:center;min-height:50vh;color:var(--tenue);font-size:12px;letter-spacing:.2em;text-transform:uppercase}
+.ar-cart{display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(28px + env(safe-area-inset-bottom,0px));align-items:center;gap:12px;padding:12px 14px 12px 18px;border:1px solid rgba(239,230,210,.3);border-radius:999px;background:rgba(21,25,29,.78);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--claro);font:400 14px/1 var(--f);letter-spacing:.04em;cursor:pointer;white-space:nowrap;z-index:3}
+.ar-cart b{font-weight:400;background:var(--claro);color:var(--fondo);border-radius:999px;padding:6px 10px}
+.ar-cart.ok b{background:var(--acento)}
+model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="object-placed"] .ar-cart{display:inline-flex}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -224,6 +228,8 @@ nav.bar .badge{position:absolute;top:9px;left:calc(50% + 7px);background:var(--a
         <div class="viewer">
           <model-viewer id="mvCfg" camera-controls touch-action="pan-y" shadow-intensity="1" shadow-softness="0.9" exposure="1.05" environment-image="neutral" ar ar-modes="webxr scene-viewer quick-look" ar-scale="fixed" ar-placement="floor" camera-orbit="30deg 72deg auto" interaction-prompt="none">
             <button slot="ar-button" hidden></button>
+            <!-- Visible solo con la cámara abierta en Android (WebXR). En iPhone, Quick Look muestra su propio botón. -->
+            <button class="ar-cart" id="arCart" type="button"><span id="arCartTxt">Agregar al carrito</span><b id="arCartPrice"></b></button>
           </model-viewer>
           <span class="dims" id="cfgDims"></span>
           <span class="busy" id="cfgBusy" hidden>Actualizando…</span>
@@ -275,7 +281,7 @@ nav.bar .badge{position:absolute;top:9px;left:calc(50% + 7px);background:var(--a
         <div id="prjList"></div>
         <div class="row">
           <button class="btn primary" id="prjAR">Ver en mi espacio</button>
-          <a class="btn" href="#cotizacion">Cotizar</a>
+          <a class="btn" href="#cotizacion">Ir al carrito</a>
           <a class="btn" href="#catalogo">+ Agregar maceta</a>
         </div>
         <div id="prjArInfo"></div>
@@ -286,8 +292,9 @@ nav.bar .badge{position:absolute;top:9px;left:calc(50% + 7px);background:var(--a
   <!-- COTIZACIÓN -->
   <section class="view" id="v-cotizacion" hidden>
     <div class="head">
-      <h1>Cotización</h1>
-      <p class="lede">Revisa las piezas, elige el tipo de cliente y envía el pedido por WhatsApp o copia el texto.</p>
+      <span class="eyebrow">Carrito</span>
+      <h1>Tu pedido</h1>
+      <p class="lede">Revisa las piezas, elige el tipo de cliente y envía el pedido por WhatsApp. Te confirmamos disponibilidad, tiempos y forma de pago.</p>
     </div>
     <div class="form">
       <label class="f">Nombre del cliente o proyecto<input id="qName" placeholder="Ej. Casa Ordóñez, terraza"></label>
@@ -343,7 +350,7 @@ nav.bar .badge{position:absolute;top:9px;left:calc(50% + 7px);background:var(--a
   <div class="in">
     <a href="#catalogo" data-v="catalogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 8h12l-1.6 12H7.6z"/><path d="M5 5h14v3H5z"/></svg>Catálogo</a>
     <a href="#proyecto" data-v="proyecto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M5 20l1-7h4l1 7"/><path d="M13 20l1-9h5l1 9"/></svg>Conjunto<span class="badge" id="navCount" hidden></span></a>
-    <a href="#cotizacion" data-v="cotizacion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></svg>Cotizar</a>
+    <a href="#cotizacion" data-v="cotizacion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H7"/><circle cx="10" cy="19.5" r="1.2"/><circle cx="17" cy="19.5" r="1.2"/></svg>Carrito</a>
     <a href="#taller" data-v="taller"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg>Taller</a>
   </div>
 </nav>
@@ -695,14 +702,25 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
   const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(p.id!=='none'&&state.plCat!=='todas'&&(state.plCat==='realistas'?!p.real:p.cat!==state.plCat))return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
     b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${p.real?MBASE.replace(/modelos\/$/,'plantas/')+'th-'+p.id+'.png':thumbs['p'+i]}">`}</div><b>${p.name}${p.real?' <span class="real">realista</span>':''}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
-  $('#cfgPrice').textContent=money(unit(d));
+  $('#cfgPrice').textContent=money(unit(d));$('#arCartPrice').textContent=money(unit(d));$('#arCartTxt').textContent='Agregar al carrito';
   const sb=$('#cfgSet');sb.hidden=m.sizes.length<2||state.edit!=null;sb.textContent=`Agregar el set completo (${m.sizes.length} piezas)`;
-  clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url;$('#cfgBusy').hidden=true},full?0:120)}
+  clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url+qlHash(d);$('#cfgBusy').hidden=true},full?0:120)}
 $('#cfgBack').onclick=()=>location.hash=state.edit!=null?'proyecto':'catalogo';
 $('#cfgAdd').onclick=()=>{const it={...state.draft};if(state.edit!=null){state.items[state.edit]=it;toast('Pieza actualizada')}else{if(state.example){state.items=[];state.qty=[];state.example=false}state.items.push(it);state.qty.push(1);toast('Agregada al conjunto')}
   state.edit=null;save();counts();location.hash='proyecto'};
 $('#cfgSet').onclick=()=>{const d=state.draft,m=MODELS[d.m];if(state.example){state.items=[];state.qty=[];state.example=false}
   m.sizes.forEach((_,k)=>{state.items.push({m:d.m,s:k,f:d.f,p:k===m.sizes.length-1?d.p:0});state.qty.push(1)});save();counts();toast(`Set ${m.name} agregado al conjunto`);location.hash='proyecto'};
+// Carrito desde la cámara: en iPhone, Quick Look muestra un botón con nombre y precio (los datos viajan en el enlace del modelo);
+// en Android, el botón flotante de la cámara. Ambos agregan la pieza sin salir de la cámara.
+function qlHash(d){const e=encodeURIComponent,F=FINISHES[d.f],P=PLANTS[d.p];
+  return '#callToAction='+e('Agregar al carrito')+'&checkoutTitle='+e(pieceName(d.m,d.s))+'&checkoutSubtitle='+e(F.name+(d.p?' · '+P.name:''))+'&price='+e(money(unit(d)))}
+function addFromAR(){const it={...state.draft};if(state.example){state.items=[];state.qty=[];state.example=false}
+  const i=state.items.findIndex(x=>x.m===it.m&&x.s===it.s&&x.f===it.f&&x.p===it.p);if(i>=0)state.qty[i]=(state.qty[i]||1)+1;else{state.items.push(it);state.qty.push(1)}
+  save();counts();const b=$('#arCart');b.classList.add('ok');$('#arCartTxt').textContent='Agregado al carrito';setTimeout(()=>{b.classList.remove('ok');$('#arCartTxt').textContent='Agregar otra'},1800);toast(pieceName(it.m,it.s)+' agregada al carrito')}
+$('#arCart').addEventListener('click',e=>{e.stopPropagation();addFromAR()});
+$('#arCart').addEventListener('pointerdown',e=>e.stopPropagation());
+$('#arCart').addEventListener('beforexrselect',e=>e.preventDefault());
+$('#mvCfg').addEventListener('quick-look-button-tapped',addFromAR);
 $('#cfgAR').onclick=()=>activate($('#mvCfg'),$('#cfgArInfo'));
 $('#mvCfg').addEventListener('load',()=>arBlock($('#cfgArInfo'),$('#mvCfg')));
 
