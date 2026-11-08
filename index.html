@@ -216,7 +216,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
     <div class="head">
       <span class="eyebrow">Catálogo</span>
       <h1>Piezas para tu espacio</h1>
-      <p class="lede">Elige una pieza, define medida, acabado y planta, y mírala a escala real en tu espacio con la cámara del celular.</p>
+      <p class="lede">Elige una pieza, define medida y acabado, y mírala a escala real en tu espacio con la cámara del celular.</p>
     </div>
     <div class="chips" id="catFilters" role="group" aria-label="Filtrar por tipo"></div>
     <div id="catGrid" class="catalogo"></div>
@@ -247,7 +247,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
         <div class="block" id="cfgSizesBlock"><h3>Medida</h3><div class="sizes" id="cfgSizes"></div></div>
         <div class="block" id="cfgSetBlock"><h3 id="cfgSetTitle">Otras piezas del set</h3><div class="setlist" id="cfgSetList"></div></div>
         <div class="block"><h3>Acabado · <b id="cfgFinName"></b></h3><div class="swatches" id="cfgFins"></div></div>
-        <div class="block"><h3>Planta · <b id="cfgPlName"></b></h3>
+        <div class="block" hidden><h3>Planta · <b id="cfgPlName"></b></h3>
           <div class="chips" id="plFilters" role="group" aria-label="Filtrar plantas"></div>
           <div class="plants" id="cfgPlants"></div></div>
         <div class="sum"><span class="hint">Precio de prueba<span id="cfgStock"></span></span><span class="price mono" id="cfgPrice"></span></div>
@@ -420,13 +420,15 @@ const FINISHES = [
   {id:'vit-negro', name:'Vitrificado negro (referencia)', mult:1.25, rough:.16, grp:'Vitrificado'},
   {id:'antique', name:'Antique (referencia)', mult:1.05, rough:.88},
 ];
+// Plantas ocultas en el sitio. Para volver a mostrarlas, cambia a false.
+const SIN_PLANTAS = true;
 const PLANTS = [
   {id:'none', name:'Sin planta', cat:'todas', h:0, p:0},
   {id:'monstera', name:'Monstera', cat:'interior', h:.9, p:35},
   {id:'sansevieria', name:'Sansevieria', cat:'interior', h:.7, p:22},
   {id:'kentia', name:'Palma kentia', cat:'interior', h:1.6, p:65},
   {id:'ficus', name:'Ficus lyrata', cat:'interior', h:1.5, p:55},
-  {id:'strelitzia', name:'Ave del paraíso', cat:'exterior', h:1.4, p:48},
+  {id:'strelitzia', name:'Ave del paraíso', cat:'exterior', h:1.46, p:48, real:'strelitzia.glb'},
   {id:'pennisetum', name:'Pasto ornamental', cat:'exterior', h:.8, p:18},
   {id:'lavanda', name:'Lavanda', cat:'exterior', h:.5, p:12},
   {id:'buxus', name:'Buxus en bola', cat:'exterior', h:.6, p:30},
@@ -620,7 +622,7 @@ const realCache={};
 function realPlant(p){return realCache[p.id]||(realCache[p.id]=loadGLB(p.real,'plantas').then(gl=>{const g=gl.scene;g.name='planta-'+p.id;
   g.traverse(o=>{if(!o.isMesh)return;const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>{const alpha=m.transparent||m.alphaTest>0;if(m.transparent){m.transparent=false;m.alphaTest=.5;m.depthWrite=true}m.side=THREE.DoubleSide;
     ['map','normalMap','roughnessMap','metalnessMap','aoMap'].forEach(k=>{if(m[k])m[k].userData.mimeType=(k==='map'&&alpha)?'image/png':'image/jpeg'})})});return g}))}
-async function plantGroupAsync(id){const p=PLANTS.find(p=>p.id===id);if(p&&p.real)return (await realPlant(p)).clone();return plantGroup(id)}
+async function plantGroupAsync(id){if(SIN_PLANTAS)return null;const p=PLANTS.find(p=>p.id===id);if(p&&p.real)return (await realPlant(p)).clone();return plantGroup(id)}
 function plantGroup(id){if(id==='none')return null;if(!plantCache[id]){const p=PLANTS.find(p=>p.id===id);plantCache[id]=PLANT_BUILD[id](p.h,rng(hashStr(id))).group('planta-'+id)}return plantCache[id].clone()}
 
 /* ---------------- Escena y exportación GLB ---------------- */
@@ -666,8 +668,8 @@ function load(){
   if(q){const its=q.split('-').map(s=>s.split('.').map(Number)).filter(a=>a.length>=4&&MODELS[a[0]]&&MODELS[a[0]].sizes[a[1]]&&FINISHES[a[2]]&&PLANTS[a[3]]);
     if(its.length){state.items=its.map(a=>({m:a[0],s:a[1],f:a[2],p:a[3]}));state.qty=its.map(a=>a[4]||1);state.shared=true;return}}
   try{const d=JSON.parse(localStorage.getItem(KEY)||'null');if(d&&Array.isArray(d.items)){state.items=d.items.filter(i=>MODELS[i.m]&&FINISHES[i.f]&&PLANTS[i.p]);state.qty=state.items.map((_,i)=>d.qty?.[i]||1);return}}catch(e){}
-  state.items=[{m:0,s:1,f:0,p:0},{m:1,s:1,f:0,p:1},{m:5,s:0,f:0,p:10}];state.qty=[1,1,1];state.example=true}
-const unit=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return Math.round(s.p*FINISHES[it.f].mult)+PLANTS[it.p].p};
+  state.items=[{m:0,s:1,f:0,p:0},{m:1,s:1,f:0,p:0},{m:5,s:0,f:0,p:0}];state.qty=[1,1,1];state.example=true}
+const unit=it=>{if(SIN_PLANTAS)it.p=0;const m=MODELS[it.m],s=m.sizes[it.s];return Math.round(s.p*FINISHES[it.f].mult)+PLANTS[it.p].p};
 const dimsTxt=(m,s)=>`Ø${s.d} × ${s.h} cm`;
 const defSize=m=>Math.min(1,MODELS[m].sizes.length-1);
 // Una forma = un modelo; sus medidas son el mismo diseño a otra escala. Un set = todas las piezas de la colección.
@@ -695,7 +697,7 @@ function stockOf(m,k,finIdx){const r=INV[pieceCode(m,k)];if(!r)return null;const
   const e=(fn&&r[fn])||r['']||(fn?null:Object.values(r).find(v=>/^disp/i.test(v))||Object.values(r)[0]);return e?(/^disp/i.test(e)?'ok':'pedido'):null}
 const stockTxt=st=>st==='ok'?'Disponible':st==='pedido'?'Bajo pedido · '+PLAZO:'';
 const stockTag=(st,cls='')=>st?`<span class="stock ${st} ${cls}">${cls==='mini'||cls==='card'?(st==='ok'?'Disponible':'Bajo pedido'):stockTxt(st)}</span>`:'';
-const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${pieceName(it.m,it.s)} · ${dimsTxt(m,s)} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}`};
+const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${pieceName(it.m,it.s)} · ${dimsTxt(m,s)} · ${FINISHES[it.f].name}${it.p&&!SIN_PLANTAS?' · '+PLANTS[it.p].name:''}`};
 
 /* ---------------- Vistas ---------------- */
 const VIEWS=['catalogo','configurar','proyecto','cotizacion','taller'];
@@ -743,11 +745,11 @@ $('#cfgBack').onclick=()=>location.hash=state.edit!=null?'proyecto':'catalogo';
 $('#cfgAdd').onclick=()=>{const it={...state.draft};if(state.edit!=null){state.items[state.edit]=it;toast('Pieza actualizada')}else{if(state.example){state.items=[];state.qty=[];state.example=false}state.items.push(it);state.qty.push(1);toast('Agregada al conjunto')}
   state.edit=null;save();counts();location.hash='proyecto'};
 $('#cfgSet').onclick=()=>{const d=state.draft,m=MODELS[d.m];if(state.example){state.items=[];state.qty=[];state.example=false}
-  m.sizes.forEach((_,k)=>{state.items.push({m:d.m,s:k,f:d.f,p:k===m.sizes.length-1?d.p:0});state.qty.push(1)});save();counts();toast(`Set ${m.name} agregado al conjunto`);location.hash='proyecto'};
+  m.sizes.forEach((_,k)=>{state.items.push({m:d.m,s:k,f:d.f,p:0});state.qty.push(1)});save();counts();toast(`Set ${m.name} agregado al conjunto`);location.hash='proyecto'};
 // Carrito desde la cámara: en iPhone, Quick Look muestra un botón con nombre y precio (los datos viajan en el enlace del modelo);
 // en Android, el botón flotante de la cámara. Ambos agregan la pieza sin salir de la cámara.
 function qlHash(d){const e=encodeURIComponent,F=FINISHES[d.f],P=PLANTS[d.p];
-  return '#callToAction='+e('Agregar al carrito')+'&checkoutTitle='+e(pieceName(d.m,d.s))+'&checkoutSubtitle='+e(F.name+(d.p?' · '+P.name:'')+(stockOf(d.m,d.s,d.f)?' · '+stockTxt(stockOf(d.m,d.s,d.f)):''))+'&price='+e(money(unit(d)))}
+  return '#callToAction='+e('Agregar al carrito')+'&checkoutTitle='+e(pieceName(d.m,d.s))+'&checkoutSubtitle='+e(F.name+(d.p&&!SIN_PLANTAS?' · '+P.name:'')+(stockOf(d.m,d.s,d.f)?' · '+stockTxt(stockOf(d.m,d.s,d.f)):''))+'&price='+e(money(unit(d)))}
 function addFromAR(){const it={...state.draft};if(state.example){state.items=[];state.qty=[];state.example=false}
   const i=state.items.findIndex(x=>x.m===it.m&&x.s===it.s&&x.f===it.f&&x.p===it.p);if(i>=0)state.qty[i]=(state.qty[i]||1)+1;else{state.items.push(it);state.qty.push(1)}
   save();counts();const b=$('#arCart');b.classList.add('ok');$('#arCartTxt').textContent='Agregado al carrito';setTimeout(()=>{b.classList.remove('ok');$('#arCartTxt').textContent='Agregar otra'},1800);toast(pieceName(it.m,it.s)+' agregada al carrito')}
@@ -763,12 +765,12 @@ async function activate(mv,info){if(mv.canActivateAR){try{await mv.activateAR()}
 /* Proyecto */
 let prjURL;
 async function renderPrj(){const L=$('#prjList');L.innerHTML='';
-  if(!state.items.length){L.innerHTML=`<div class="empty"><h2>Aún no hay piezas</h2><p class="hint">Elige un modelo en el catálogo, configúralo y agrégalo aquí. Puedes combinar varias macetas y plantas en un mismo espacio.</p><a class="btn primary" href="#catalogo">Ir al catálogo</a></div>`;$('#prjAR').disabled=true;$('#mvPrj').src='';return}
+  if(!state.items.length){L.innerHTML=`<div class="empty"><h2>Aún no hay piezas</h2><p class="hint">Elige un modelo en el catálogo, configúralo y agrégalo aquí. Puedes combinar varias macetas en un mismo espacio.</p><a class="btn primary" href="#catalogo">Ir al catálogo</a></div>`;$('#prjAR').disabled=true;$('#mvPrj').src='';return}
   $('#prjAR').disabled=false;
   if(state.example){const n=document.createElement('p');n.className='warnbox';n.innerHTML='<b>Conjunto de ejemplo</b><span>Al agregar tu primera pieza, este ejemplo se reemplaza.</span>';L.appendChild(n)}
   const box=document.createElement('div');box.className='items';
   for(const [i,it] of state.items.entries()){const key='i'+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),200,200);
-    const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${pieceName(it.m,it.s)} · ${money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${FINISHES[it.f].name}${it.p?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
+    const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${pieceName(it.m,it.s)} · ${money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${FINISHES[it.f].name}${it.p&&!SIN_PLANTAS?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
     r.querySelector('[data-e]').onclick=()=>{state.draft={...it};state.edit=i;location.hash='configurar'};
     r.querySelector('[data-x]').onclick=()=>{state.items.splice(i,1);state.qty.splice(i,1);state.example=false;save();counts();renderPrj()};box.appendChild(r)}
   L.appendChild(box);
@@ -816,7 +818,7 @@ $('#mvUp').addEventListener('load',()=>{const mv=$('#mvUp');try{const d=mv.getDi
 async function boot(){load();const invP=loadInventory();
   await new Promise(r=>setTimeout(r,30));
   await Promise.all(MODELS.flatMap((m,i)=>m.sizes.map(async(_,k)=>{thumbs['m'+i+'-'+k]=thumb(await pieceGroup({m:i,s:k,f:0,p:0}))})));
-  PLANTS.forEach((p,i)=>{if(p.id!=='none'&&!p.real){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
+  if(SIN_PLANTAS)0;else PLANTS.forEach((p,i)=>{if(p.id!=='none'&&!p.real){const g=plantGroup(p.id);thumbs['p'+i]=thumb(g,240,320,.15)}});
   $('#boot').remove();renderCatalog();counts();
   invP.then(()=>{if(!invReady)return;renderCatalog();const v=(location.hash||'#catalogo').slice(1);if(v==='configurar')renderCfg();if(v==='cotizacion')renderQuote()});
   if(state.shared&&!location.hash)location.hash='proyecto';
