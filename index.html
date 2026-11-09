@@ -524,7 +524,7 @@ function finishCanvas(id){if(texCache[id])return texCache[id];const f=FINISHES.f
 const TBASE=()=>MBASE.replace(/modelos\/$/,'texturas/');
 const finLoading={};
 function ensureFinish(id){const f=FINISHES.find(f=>f.id===id);if(!f||!f.photo||f.canvas)return Promise.resolve();
-  return finLoading[id]||(finLoading[id]=new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=im.naturalWidth;c.getContext('2d').drawImage(im,0,0);f.canvas=c;res()};im.onerror=()=>rej(new Error('No se pudo cargar la textura '+f.name));im.src=TBASE()+f.photo+'.jpg'}))}
+  return finLoading[id]||(finLoading[id]=new Promise((res,rej)=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=im.naturalWidth;c.getContext('2d').drawImage(im,0,0);f.canvas=c;res()};im.onerror=()=>rej(new Error('No se pudo cargar la textura '+f.name));im.src=TBASE()+f.photo+'.jpg?v=3'}))}
 const soilCanvas=(()=>{let c;return()=>{if(c)return c;const n=fbm(7,8,4);c=pixels((u,v)=>mix(hex('#2B211B'),hex('#4A3A2E'),n(u,v))).c;return c}})();
 function canvasTex(cv){const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.userData.mimeType='image/jpeg';t.anisotropy=4;return t}
 const matCache={};
@@ -582,10 +582,10 @@ function wearGeo(p,yMin,yMax,tint){if(p.wearGeo)return p.wearGeo;const g=p.geo.c
     const edge=Math.min(1,crease[gid[i]]/q90);
     const rim=wstep(yMax-.04,yMax-.004,y),base=wstep(yMin+.03,yMin+.002,y)*.7;
     const big=fbm3(x*7+3.1,y*7,z*7),fine=fbm3(x*38,y*38+5.7,z*38);
-    const zona=wstep(.3,.66,big);                                   // el desgaste se concentra en zonas, no en toda la pieza
-    let w=Math.max(edge*.95*zona,rim*(.55+zona*.6),base*(.5+zona*.6))+wstep(.7,.85,big)*.45;
+    const zona=wstep(.2,.56,big);                                   // el desgaste se concentra en zonas, no en toda la pieza
+    let w=Math.max(edge*1.05*zona,rim*(.65+zona*.6),base*(.6+zona*.6))+wstep(.6,.8,big)*.55;
     w=w+(fine-.5)*.6;                                                 // borde roto, irregular
-    w=wstep(.55,.8,w);
+    w=wstep(.5,.76,w);
     for(let k=0;k<3;k++)col[i*3+k]=1-w*(1-tint[k])}
   g.setAttribute('color',new THREE.BufferAttribute(col,3));p.wearGeo=g;return g}
 let soilMat;
