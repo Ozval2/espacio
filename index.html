@@ -96,6 +96,8 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;background:transp
 .viewer .busy{position:absolute;right:14px;bottom:14px;font-size:11px;letter-spacing:.1em;color:var(--suave)}
 .viewer .dims{position:absolute;left:14px;top:14px;font-size:12px;letter-spacing:.06em;color:var(--claro);background:rgba(21,25,29,.6);padding:5px 10px;border-radius:2px;font-variant-numeric:tabular-nums}
 .hint{font-size:13px;color:var(--tenue)}
+.fin-desc{margin:12px 0 0;color:var(--claro);opacity:.85}.fin-desc b{font-weight:400}
+.fin-nota{margin:8px 0 0;font-size:12px;line-height:1.55}
 .panel{display:flex;flex-direction:column;gap:26px;min-width:0}
 .block{display:flex;flex-direction:column;gap:12px}
 .block h3 b{font-weight:400;color:var(--claro);letter-spacing:.04em;text-transform:none;font-size:13px}
@@ -246,7 +248,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
         <div class="head"><h2 id="cfgName"></h2><p class="lede" id="cfgDesc"></p></div>
         <div class="block" id="cfgSizesBlock"><h3>Medida</h3><div class="sizes" id="cfgSizes"></div></div>
         <div class="block" id="cfgSetBlock"><h3 id="cfgSetTitle">Otras piezas del set</h3><div class="setlist" id="cfgSetList"></div></div>
-        <div class="block"><h3>Acabado · <b id="cfgFinName"></b></h3><div class="swatches" id="cfgFins"></div></div>
+        <div class="block"><h3>Acabado · <b id="cfgFinName"></b></h3><div class="swatches" id="cfgFins"></div><p class="hint fin-desc" id="cfgFinDesc"></p><p class="hint fin-nota">Cada pieza se hace a mano y su acabado se forma en el momento. El color, la textura y el dibujo de la superficie pueden variar respecto a lo que ves en pantalla: por eso no hay dos piezas iguales.</p></div>
         <div class="block" hidden><h3>Planta · <b id="cfgPlName"></b></h3>
           <div class="chips" id="plFilters" role="group" aria-label="Filtrar plantas"></div>
           <div class="plants" id="cfgPlants"></div></div>
@@ -406,10 +408,10 @@ const MODELS = [
 const TYPES = [['todas','Todas'],['set','Sets'],['alta','Altas'],['baja','Bajas']];
 const FINISHES = [
   {id:'original', name:'Original del modelo', mult:1, rough:.9},
-  {id:'coral-beige', name:'Coral beige', mult:1, rough:.95, photo:'coral-beige', grp:'Coral'},
-  {id:'coral-arena', name:'Coral arena', mult:1, rough:.95, photo:'coral-arena', grp:'Coral'},
-  {id:'coral-gris', name:'Coral gris', mult:1, rough:.95, photo:'coral-gris', grp:'Coral'},
-  {id:'coral-gris-blanco', name:'Coral gris con blanco', mult:1, rough:.95, photo:'coral-gris-blanco', grp:'Coral'},
+  {id:'coral-beige', name:'Pavona beige', old:'Coral beige', mult:1, rough:.95, photo:'coral-beige', grp:'Pavona'},
+  {id:'coral-arena', name:'Pavona arena', old:'Coral arena', mult:1, rough:.95, photo:'coral-arena', grp:'Pavona'},
+  {id:'coral-gris', name:'Pavona gris', old:'Coral gris', mult:1, rough:.95, photo:'coral-gris', grp:'Pavona'},
+  {id:'coral-gris-blanco', name:'Pavona perla', old:'Coral gris con blanco', mult:1, rough:.95, photo:'coral-gris-blanco', grp:'Pavona'},
   {id:'recife', name:'Recife', mult:1.05, rough:.9, photo:'recife', grp:'Recife'},
   {id:'recife-reagente', name:'Recife con reagente', mult:1.1, rough:.9, photo:'recife-reagente', grp:'Recife'},
   {id:'recife-oxido', name:'Recife óxido', mult:1.1, rough:.9, photo:'recife-oxido', grp:'Recife'},
@@ -420,6 +422,10 @@ const FINISHES = [
   {id:'vit-negro', name:'Vitrificado negro (referencia)', mult:1.25, rough:.16, grp:'Vitrificado'},
   {id:'antique', name:'Antique (referencia)', mult:1.05, rough:.88},
 ];
+// Texto de cada línea de acabados (se muestra al elegir un acabado de esa línea).
+const GRP_DESC = {
+  Pavona:'Por los corales de Galápagos, de superficie porosa y tonos de arena.',
+};
 // Plantas ocultas en el sitio. Para volver a mostrarlas, cambia a false.
 const SIN_PLANTAS = true;
 // Precios ocultos hasta tener el cálculo real de costos. Para mostrarlos, cambia a false.
@@ -695,8 +701,8 @@ function parseCSV(t){const rows=[];let row=[],f='',q=false;for(let i=0;i<t.lengt
 async function loadInventory(){if(!INV_URL)return;try{const r=await fetch(INV_URL+(INV_URL.includes('?')?'&':'?')+'t='+Math.floor(Date.now()/3e5),{cache:'no-store'});if(!r.ok)return;
   parseCSV(await r.text()).slice(1).forEach(([c,a,e])=>{c=norm(c);e=(e||'').trim();if(!c||!e)return;(INV[c]=INV[c]||{})[norm(a)]=e});invReady=true}catch(e){}}
 // Estado de una pieza; si se indica acabado, se usa la fila de ese acabado y, si no hay, la general.
-function stockOf(m,k,finIdx){const r=INV[pieceCode(m,k)];if(!r)return null;const fn=finIdx!=null?norm(FINISHES[finIdx].name):'';
-  const e=(fn&&r[fn])||r['']||(fn?null:Object.values(r).find(v=>/^disp/i.test(v))||Object.values(r)[0]);return e?(/^disp/i.test(e)?'ok':'pedido'):null}
+function stockOf(m,k,finIdx){const r=INV[pieceCode(m,k)];if(!r)return null;const fn=finIdx!=null?norm(FINISHES[finIdx].name):'',fo=finIdx!=null&&FINISHES[finIdx].old?norm(FINISHES[finIdx].old):'';
+  const e=(fn&&r[fn])||(fo&&r[fo])||r['']||(fn?null:Object.values(r).find(v=>/^disp/i.test(v))||Object.values(r)[0]);return e?(/^disp/i.test(e)?'ok':'pedido'):null}
 const stockTxt=st=>st==='ok'?'Disponible':st==='pedido'?'Bajo pedido · '+PLAZO:'';
 const stockTag=(st,cls='')=>st?`<span class="stock ${st} ${cls}">${cls==='mini'||cls==='card'?(st==='ok'?'Disponible':'Bajo pedido'):stockTxt(st)}</span>`:'';
 const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${pieceName(it.m,it.s)} · ${dimsTxt(m,s)} · ${FINISHES[it.f].name}${it.p&&!SIN_PLANTAS?' · '+PLANTS[it.p].name:''}`};
@@ -736,7 +742,7 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   const others=formas(d.m);$('#cfgSetBlock').hidden=others.length<2;$('#cfgSetTitle').textContent=`Las ${others.length} piezas del set ${m.name}`;
   const sl=$('#cfgSetList');sl.innerHTML='';others.forEach(f=>{const k=f===fA?d.s:repSize(d.m,f);const b=document.createElement('button');b.className='setp';b.setAttribute('aria-current',f===fA);b.innerHTML=`<img alt="" src="${thumbs['m'+d.m+'-'+k]}"><span>${pieceName(d.m,k)}<br><span class="hint">${dimsTxt(m,m.sizes[k])}</span></span>`;b.onclick=()=>{d.s=k;renderCfg()};sl.appendChild(b)});
   const fs=$('#cfgFins');fs.innerHTML='';FINISHES.forEach((f,i)=>{const b=document.createElement('button');b.className='sw';b.setAttribute('aria-pressed',i===d.f);b.innerHTML=`<img alt="" src="${f.photo?TBASE()+'sw-'+f.photo+'.jpg':(f.sw||(f.sw=swatchURL(f.id)))}"><span>${f.name.replace('Vitrificado ','Vitrif. ')}</span>`;b.title=f.name;b.onclick=()=>{d.f=i;renderCfg()};fs.appendChild(b)});
-  $('#cfgFinName').textContent=FINISHES[d.f].name;$('#cfgPlName').textContent=PLANTS[d.p].name+(d.p?` · ${Math.round(PLANTS[d.p].h*100)} cm aprox.`:'');
+  $('#cfgFinName').textContent=FINISHES[d.f].name;{const g=FINISHES[d.f].grp,t=g&&GRP_DESC[g];$('#cfgFinDesc').innerHTML=t?`<b>${g}:</b> ${t}`:'';$('#cfgFinDesc').hidden=!t}$('#cfgPlName').textContent=PLANTS[d.p].name+(d.p?` · ${Math.round(PLANTS[d.p].h*100)} cm aprox.`:'');
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
   const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(p.id!=='none'&&state.plCat!=='todas'&&(state.plCat==='realistas'?!p.real:p.cat!==state.plCat))return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
     b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${p.real?MBASE.replace(/modelos\/$/,'plantas/')+'th-'+p.id+'.png':thumbs['p'+i]}">`}</div><b>${p.name}${p.real?' <span class="real">realista</span>':''}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
