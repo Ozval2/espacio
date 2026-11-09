@@ -421,7 +421,7 @@ const FINISHES = [
   {id:'vit-verde', name:'Vitrificado verde Teresa', mult:1.25, rough:.22, photo:'vit-verde', grp:'Vitrificado'},
   {id:'vit-azul', name:'Vitrificado azul camaleón', mult:1.25, rough:.22, photo:'vit-azul', grp:'Vitrificado'},
   {id:'vit-negro', name:'Vitrificado negro (referencia)', mult:1.25, rough:.16, grp:'Vitrificado'},
-  {id:'antique', name:'Narrío crema', old:'Antique', mult:1.05, rough:.88, photo:'narrio', grp:'Narrío'},
+  {id:'antique', name:'Narrío crema', old:'Antique', mult:1.05, rough:.88, photo:'narrio', grp:'Narrío', wear:[.56,.21,.12]},
 ];
 // Texto de cada línea de acabados (se muestra al elegir un acabado de esa línea).
 const GRP_DESC = {
@@ -529,7 +529,7 @@ const soilCanvas=(()=>{let c;return()=>{if(c)return c;const n=fbm(7,8,4);c=pixel
 function canvasTex(cv){const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.userData.mimeType='image/jpeg';t.anisotropy=4;return t}
 const matCache={};
 function finishMat(id){if(matCache[id])return matCache[id];const f=FINISHES.find(f=>f.id===id);
-  matCache[id]=new THREE.MeshStandardMaterial({map:canvasTex(finishCanvas(id)),roughness:f.rough,metalness:0,name:'acabado-'+id});return matCache[id]}
+  matCache[id]=new THREE.MeshStandardMaterial({map:canvasTex(finishCanvas(id)),roughness:f.rough,metalness:0,vertexColors:!!f.wear,name:'acabado-'+id});return matCache[id]}
 
 /* ---------------- Modelos reales (GLB del taller) ---------------- */
 const loader=new GLTFLoader();loader.setMeshoptDecoder(MeshoptDecoder);
@@ -558,9 +558,40 @@ async function loadPot(file){if(potCache[file])return potCache[file];
     parts.forEach(p=>{const P=p.geo.attributes.position;for(let i=0;i<P.count;i++){const y=P.getY(i);if(Math.abs(y-soilY)<.012){const r=Math.hypot(P.getX(i),P.getZ(i));if(r<rIn)rIn=r}}});
     if(rIn===1e9)rIn=.1;return {parts,soilY,rIn:rIn*.97}})();
   return potCache[file]}
+
+/* Desgaste por uso: el color de fondo (terracota) asoma donde una pieza real se gasta:
+   el borde de la boca, la base, las aristas y relieves; con manchas irregulares, nunca parejo. */
+function hash3(x,y,z){let h=Math.sin(x*127.1+y*311.7+z*74.7)*43758.5453;return h-Math.floor(h)}
+function vnoise(x,y,z){const X=Math.floor(x),Y=Math.floor(y),Z=Math.floor(z),fx=x-X,fy=y-Y,fz=z-Z,u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy),w=fz*fz*(3-2*fz);
+  const L=(a,b,t)=>a+(b-a)*t,c=(i,j,k)=>hash3(X+i,Y+j,Z+k);
+  return L(L(L(c(0,0,0),c(1,0,0),u),L(c(0,1,0),c(1,1,0),u),v),L(L(c(0,0,1),c(1,0,1),u),L(c(0,1,1),c(1,1,1),u),v),w)}
+function fbm3(x,y,z){return vnoise(x,y,z)*.55+vnoise(x*2.1,y*2.1,z*2.1)*.3+vnoise(x*4.3,y*4.3,z*4.3)*.15}
+const wstep=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
+function wearGeo(p,yMin,yMax,tint){if(p.wearGeo)return p.wearGeo;const g=p.geo.clone(),P=g.attributes.position,n=P.count;
+  const key=i=>Math.round(P.getX(i)*2e3)+','+Math.round(P.getY(i)*2e3)+','+Math.round(P.getZ(i)*2e3);
+  const gid=new Int32Array(n),groups=new Map();for(let i=0;i<n;i++){const k=key(i);let id=groups.get(k);if(id===undefined){id=groups.size;groups.set(k,id)}gid[i]=id}
+  const G=groups.size,sx=new Float32Array(G),sy=new Float32Array(G),sz=new Float32Array(G),cnt=new Float32Array(G);
+  const idx=g.index?g.index.array:null,tri=idx?idx.length/3:n/3,a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3(),e1=new THREE.Vector3(),e2=new THREE.Vector3();
+  for(let t=0;t<tri;t++){const i0=idx?idx[t*3]:t*3,i1=idx?idx[t*3+1]:t*3+1,i2=idx?idx[t*3+2]:t*3+2;a.fromBufferAttribute(P,i0);b.fromBufferAttribute(P,i1);c.fromBufferAttribute(P,i2);
+    e1.subVectors(b,a);e2.subVectors(c,a);e1.cross(e2);const l=e1.length();if(l<1e-12)continue;e1.divideScalar(l);
+    for(const i of [i0,i1,i2]){const q=gid[i];sx[q]+=e1.x;sy[q]+=e1.y;sz[q]+=e1.z;cnt[q]++}}
+  const crease=new Float32Array(G);for(let q=0;q<G;q++)crease[q]=cnt[q]?1-Math.hypot(sx[q],sy[q],sz[q])/cnt[q]:0;
+  const sorted=Array.from(crease).sort((x,y)=>x-y),q90=Math.max(sorted[Math.floor(G*.92)]||0,1e-4);
+  const col=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const x=P.getX(i),y=P.getY(i),z=P.getZ(i);
+    const edge=Math.min(1,crease[gid[i]]/q90);
+    const rim=wstep(yMax-.04,yMax-.004,y),base=wstep(yMin+.03,yMin+.002,y)*.7;
+    const big=fbm3(x*7+3.1,y*7,z*7),fine=fbm3(x*38,y*38+5.7,z*38);
+    const zona=wstep(.3,.66,big);                                   // el desgaste se concentra en zonas, no en toda la pieza
+    let w=Math.max(edge*.95*zona,rim*(.55+zona*.6),base*(.5+zona*.6))+wstep(.7,.85,big)*.45;
+    w=w+(fine-.5)*.6;                                                 // borde roto, irregular
+    w=wstep(.55,.8,w);
+    for(let k=0;k<3;k++)col[i*3+k]=1-w*(1-tint[k])}
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));p.wearGeo=g;return g}
 let soilMat;
 async function potGroup(model,s,finishId){const d=await loadPot(s.file);if(finishId!=='original')await ensureFinish(finishId);const g=new THREE.Group();
-  d.parts.forEach((p,i)=>{const mat=(finishId==='original'||p.interior)?p.orig:finishMat(finishId);const mesh=new THREE.Mesh(p.geo,mat);mesh.name='maceta-'+i;g.add(mesh)});
+  const F=FINISHES.find(f=>f.id===finishId);let yMin=1e9,yMax=-1e9;if(F&&F.wear)d.parts.forEach(p=>{yMin=Math.min(yMin,p.geo.boundingBox.min.y);yMax=Math.max(yMax,p.geo.boundingBox.max.y)});
+  d.parts.forEach((p,i)=>{const plain=finishId==='original'||p.interior,mat=plain?p.orig:finishMat(finishId);const geo=(!plain&&F.wear)?wearGeo(p,yMin,yMax,F.wear):p.geo;const mesh=new THREE.Mesh(geo,mat);mesh.name='maceta-'+i;g.add(mesh)});
   const sg=new THREE.CircleGeometry(d.rIn,48);sg.rotateX(-Math.PI/2);sg.translate(0,d.soilY,0);
   if(!soilMat)soilMat=new THREE.MeshStandardMaterial({map:canvasTex(soilCanvas()),roughness:1,name:'tierra'});
   const soil=new THREE.Mesh(sg,soilMat);soil.name='tierra';g.add(soil);g.userData.soilY=d.soilY;return g}
