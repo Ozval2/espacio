@@ -308,7 +308,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
     <div class="head">
       <span class="eyebrow">Carrito</span>
       <h1>Tu pedido</h1>
-      <p class="lede">Registra tus datos, revisa las piezas y descarga tu cotización en PDF.</p>
+      <p class="lede">Registra tus datos, revisa las piezas y envíanos tu cotización por WhatsApp. También puedes descargarla en PDF.</p>
     </div>
     <h3 class="q-step">1 · Tus datos</h3>
     <form class="form" id="qForm" novalidate onsubmit="return false">
@@ -333,7 +333,8 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
       <span class="mono" style="font-size:13px">Disponibles a partir de mediados de enero. Los tiempos de entrega se anunciarán próximamente.</span>
     </div>
     <div class="row">
-      <button class="btn primary" id="qPdf">Descargar cotización PDF</button>
+      <button class="btn primary" id="qWa">Enviar a GUABLID por WhatsApp</button>
+      <button class="btn" id="qPdf">Descargar cotización PDF</button>
       <button class="btn" id="qShare" hidden>Compartir PDF</button>
       <button class="btn" id="qLink">Copiar enlace del proyecto</button>
     </div>
@@ -859,14 +860,14 @@ $('#qId').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D
 const finLabel=f=>FINISHES[f].oculto?'Por definir':FINISHES[f].name;
 const availTxt=st=>st==='ok'?'Disponible en stock':st==='pedido'?'Bajo pedido · '+PLAZO:'Disponibilidad por confirmar';
 async function itemImg(it,size){const key=(size>200?'pdf':'i')+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),size,size);return thumbs[key]}
-function renderQuote(){const T=$('#qTable');const q=quoteData();$('#qPdf').disabled=!state.items.length;lastPdf=null;
+function renderQuote(){const T=$('#qTable');const q=quoteData();$('#qPdf').disabled=$('#qWa').disabled=!state.items.length;lastPdf=null;
   if(!state.items.length){T.innerHTML='<tbody><tr><td>No hay piezas en el pedido. <a href="#catalogo">Ir al catálogo</a></td></tr></tbody>';}
   else{T.innerHTML=`<thead><tr><th></th><th>Pieza</th><th>Cant.</th>${SIN_PRECIOS?'':'<th class="n">Total</th>'}</tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td class="ph"><img alt="" data-i="${i}"></td><td>${itemLine(l.it)}${SIN_PRECIOS?'':`<br><span class="mono hint">${money2(l.u)} c/u</span>`}${stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td>${SIN_PRECIOS?'':`<td class="n">${money2(l.u*l.q)}</td>`}</tr>`).join('')}</tbody>
   ${SIN_PRECIOS?'':`<tfoot><tr><td></td><td colspan="2">Subtotal</td><td class="n">${money2(q.sub)}</td></tr>${q.desc?`<tr><td></td><td colspan="2">Descuento ${q.t.n} (${Math.round(q.t.d*100)} %)</td><td class="n">−${money2(q.desc)}</td></tr>`:''}<tr><td></td><td colspan="2">IVA 15 %</td><td class="n">${money2(q.iva)}</td></tr><tr class="tot"><td></td><td colspan="2">Total</td><td class="n">${money2(q.total)}</td></tr></tfoot>`}`;
   T.querySelectorAll('img[data-i]').forEach(async im=>{try{im.src=await itemImg(state.items[+im.dataset.i],200)}catch(e){}});
   T.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const i=+b.dataset.d;state.qty[i]=Math.max(1,(state.qty[i]||1)-1);save();counts();renderQuote()});
   T.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const i=+b.dataset.u;state.qty[i]=(state.qty[i]||1)+1;save();counts();renderQuote()})}
-  $('#qNote').textContent='El PDF incluye tus datos, cada pieza con su acabado y su disponibilidad. Envíalo a GUABLID por WhatsApp o correo y te confirmamos precios y tiempos de entrega.'}
+  $('#qNote').textContent='La cotización incluye tus datos, cada pieza con su acabado y su disponibilidad. Al enviarla por WhatsApp, GUABLID recibe el PDF y te confirma precios y tiempos de entrega.'}
 $('#qTypeWrap').hidden=SIN_PRECIOS;$('#qType').onchange=renderQuote;
 async function copy(txt,ok){try{await navigator.clipboard.writeText(txt);toast(ok)}catch(e){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast(ok)}catch(_){toast('No se pudo copiar. Selecciona el texto manualmente.')}ta.remove()}}
 
@@ -941,6 +942,28 @@ async function makePdf(){if(!state.items.length){toast('Agrega al menos una piez
   try{lastPdf=await buildPdf(d);return lastPdf}catch(e){toast(e.message||'No se pudo generar el PDF');return null}finally{b.disabled=false;b.textContent=t0}}
 $('#qPdf').onclick=async()=>{const p=await makePdf();if(!p)return;const u=URL.createObjectURL(p.blob),a=document.createElement('a');a.href=u;a.download=p.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),6e4);toast('Cotización '+p.num+' descargada')};
 try{if(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.pdf',{type:'application/pdf'})]}))$('#qShare').hidden=false}catch(e){}
+// Enviar a GUABLID: el PDF se guarda en el Drive de GUABLID y el mensaje de WhatsApp lleva el número y el enlace.
+const WA_NUM='593962702093';
+const blobB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(b)});
+async function uploadPdf(p){if(p.url||!/^GUA-\d{6}$/.test(p.num))return p.url||'';
+  try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),30000);
+    const r=await fetch(COT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({accion:'pdf',num:p.num,b64:await blobB64(p.blob)}),signal:ctl.signal});clearTimeout(t);
+    const j=await r.json();if(j.ok&&j.url)p.url=j.url}catch(e){}return p.url||''}
+function waText(p,d,url){const q=quoteData(),n=q.lines.reduce((a,l)=>a+l.q,0);
+  let s=`Hola GUABLID, les envío mi solicitud de cotización ${p.num}.\n\nCliente: ${d.cli}${d.pro?`\nProyecto: ${d.pro}`:''}\nPiezas (${n}):\n`;
+  q.lines.forEach(l=>{s+=`• ${pieceName(l.it.m,l.it.s)} · ${finLabel(l.it.f)} · ${l.q} u\n`});
+  if(url)s+=`\nCotización en PDF: ${url}`;else s+=`\nTengo la cotización en PDF y se la envío por aquí.`;
+  return s}
+$('#qWa').onclick=async()=>{if(!state.items.length){toast('Agrega al menos una pieza');return}
+  if(!checkClient()){$('#qForm').scrollIntoView({behavior:'smooth',block:'start'});toast('Completa tus datos para enviar la cotización');return}
+  // La ventana se abre en el mismo toque para que el navegador no la bloquee.
+  let w=null;try{w=window.open('','_blank');if(w)w.document.write('<p style="font:16px sans-serif;padding:24px">Preparando tu cotización…</p>')}catch(e){}
+  const b=$('#qWa'),t0=b.textContent;
+  const p=await makePdf();if(!p){if(w)w.close();return}
+  b.disabled=true;b.textContent='Enviando…';const url=await uploadPdf(p);b.disabled=false;b.textContent=t0;
+  const link=`https://wa.me/${WA_NUM}?text=${encodeURIComponent(waText(p,clientData(),url))}`;
+  if(w&&!w.closed)w.location.href=link;else location.href=link;
+  if(!url)$('#qPdf').click()};
 $('#qShare').onclick=async()=>{const p=await makePdf();if(!p)return;const file=new File([p.blob],p.name,{type:'application/pdf'});
   try{await navigator.share({files:[file],title:'Cotización GUABLID '+p.num})}catch(e){if(e.name!=='AbortError')$('#qPdf').click()}};
 $('#qLink').onclick=()=>copy(shareLink(),'Enlace del proyecto copiado');
