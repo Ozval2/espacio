@@ -762,7 +762,7 @@ function route(){let v=(location.hash||'#catalogo').slice(1);if(!VIEWS.includes(
   VIEWS.forEach(n=>$('#v-'+n).hidden=n!==v);
   document.querySelectorAll('nav.bar a').forEach(a=>a.toggleAttribute('aria-current',a.dataset.v===v||(v==='configurar'&&a.dataset.v==='catalogo')));
   document.querySelectorAll('nav.bar a').forEach(a=>{if(a.hasAttribute('aria-current'))a.setAttribute('aria-current','page')});
-  if(v==='configurar')renderCfg(true);if(v==='proyecto')renderPrj();if(v==='cotizacion')renderQuote();window.scrollTo(0,0)}
+  if(v==='configurar')renderCfg(true);if(v==='proyecto')renderPrj();if(v==='cotizacion'){renderQuote();setTimeout(warmPdf,300)}window.scrollTo(0,0)}
 function counts(){const n=state.qty.reduce((a,b)=>a+b,0);const b=$('#navCount');b.hidden=!state.items.length;b.textContent=n;$('#topCount').textContent=state.items.length?`${n} pieza${n>1?'s':''} en el conjunto`:''}
 
 /* Catálogo */
@@ -860,6 +860,15 @@ $('#qId').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D
 const finLabel=f=>FINISHES[f].oculto?'Por definir':FINISHES[f].name;
 const availTxt=st=>st==='ok'?'Disponible en stock':st==='pedido'?'Bajo pedido · '+PLAZO:'Disponibilidad por confirmar';
 async function itemImg(it,size){const key=(size>200?'pdf':'i')+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),size,size);return thumbs[key]}
+// Imagen para el PDF: JPEG liviano sobre el fondo de la ficha (un PNG con transparencia pesa megas dentro del PDF).
+const pdfImgs={};
+function pdfImg(it){const key=JSON.stringify(it);return pdfImgs[key]||(pdfImgs[key]=(async()=>{const png=thumb(await pieceGroup(it),400,400);
+  const im=new Image();await new Promise((r,j)=>{im.onload=r;im.onerror=j;im.src=png});
+  const c=document.createElement('canvas');c.width=c.height=400;const g=c.getContext('2d');g.fillStyle='#F3EFE8';g.fillRect(0,0,400,400);g.drawImage(im,0,0,400,400);
+  return c.toDataURL('image/jpeg',.82)})().catch(e=>{delete pdfImgs[key];throw e}))}
+// Se preparan en segundo plano al abrir el carrito, para que enviar la cotización sea inmediato.
+function warmPdf(){if(!state.items.length)return;loadJsPDF().catch(()=>{});logoPNG().catch(()=>{});
+  (async()=>{for(const it of state.items){try{await pdfImg(it)}catch(e){}}})()}
 function renderQuote(){const T=$('#qTable');const q=quoteData();$('#qPdf').disabled=$('#qWa').disabled=!state.items.length;lastPdf=null;
   if(!state.items.length){T.innerHTML='<tbody><tr><td>No hay piezas en el pedido. <a href="#catalogo">Ir al catálogo</a></td></tr></tbody>';}
   else{T.innerHTML=`<thead><tr><th></th><th>Pieza</th><th>Cant.</th>${SIN_PRECIOS?'':'<th class="n">Total</th>'}</tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td class="ph"><img alt="" data-i="${i}"></td><td>${itemLine(l.it)}${SIN_PRECIOS?'':`<br><span class="mono hint">${money2(l.u)} c/u</span>`}${stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td>${SIN_PRECIOS?'':`<td class="n">${money2(l.u*l.q)}</td>`}</tr>`).join('')}</tbody>
@@ -879,7 +888,7 @@ let logoP=null;
 function logoPNG(){return logoP||(logoP=(async()=>{const ink='#262320',inner=el=>el.innerHTML.replaceAll('currentColor',ink);
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1960" height="480" viewBox="0 0 490 120"><svg x="0" y="0" width="120" height="120" viewBox="-6 -6 112 112">${inner($('.brand .sim'))}</svg><svg x="152" y="33" width="300" height="54" viewBox="-8 -10 667 120">${inner($('.brand .nom'))}</svg></svg>`;
   const im=new Image();await new Promise((r,j)=>{im.onload=r;im.onerror=j;im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)});
-  const c=document.createElement('canvas');c.width=1960;c.height=480;c.getContext('2d').drawImage(im,0,0,1960,480);return c.toDataURL('image/png')})())}
+  const c=document.createElement('canvas');c.width=980;c.height=240;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,980,240);g.drawImage(im,0,0,980,240);return c.toDataURL('image/jpeg',.9)})())}
 const fechaLarga=d=>d.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'});
 // Numeración consecutiva: la lleva la hoja "Cotizaciones GUABLID" (Google Apps Script).
 const COT_URL='https://script.google.com/macros/s/AKfycbyMsN55hgQh2QDEjBBch80o7GEkEa_q7cLVs-LtVa21iLxEPvvmxA8gqPK5pBVtoXoPUg/exec';
@@ -891,16 +900,17 @@ async function quoteNumber(d){const q=quoteData();
     const j=await r.json();if(j.ok&&/^GUA-\d{6}$/.test(j.num))return j.num}catch(e){}
   // Sin conexión con la hoja: número provisional, para que el cliente igual reciba su PDF.
   const now=new Date(),pad=n=>String(n).padStart(2,'0');return `GUA-P${String(now.getFullYear()).slice(2)}${pad(now.getMonth()+1)}${pad(now.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`}
-async function buildPdf(d){const jsPDF=await loadJsPDF(),q=quoteData(),logo=await logoPNG();
-  const imgs=[];for(const l of q.lines)imgs.push(await itemImg(l.it,480));
+async function buildPdf(d){const numP=quoteNumber(d);// el número se pide mientras se arma el PDF
+  const jsPDF=await loadJsPDF(),q=quoteData(),logo=await logoPNG();
+  const imgs=[];for(const l of q.lines)imgs.push(await pdfImg(l.it).catch(()=>null));
   const doc=new jsPDF({unit:'mm',format:'a4'}),W=210,H=297,M=18,R=W-M;
   const C={ink:[38,35,32],soft:[95,88,80],faint:[146,138,128],line:[221,214,203],acc:[156,79,46],bg:[243,239,232]};
   const col=c=>doc.setTextColor(...C[c]),font=(st,sz)=>{doc.setFont('helvetica',st);doc.setFontSize(sz)};
   const label=(t,x,y,o={})=>{font('normal',6.8);col(o.c||'faint');t=t.toUpperCase();if(o.align==='right')x-=doc.getTextWidth(t)+.55*t.length;doc.text(t,x,y,{charSpace:.55})};
   const rule=(y,c='line',w=.2)=>{doc.setDrawColor(...C[c]);doc.setLineWidth(w);doc.line(M,y,R,y)};
-  const now=new Date(),num=await quoteNumber(d);
+  const now=new Date(),num=await numP;
   // Encabezado
-  doc.addImage(logo,'PNG',M,M,50,50*120/490);
+  doc.addImage(logo,'JPEG',M,M,50,50*120/490);
   label('Cotización',R,M+3,{align:'right',c:'acc'});font('normal',12);col('ink');doc.text(num,R,M+9.5,{align:'right'});
   font('normal',8.5);col('soft');doc.text(fechaLarga(now),R,M+14.5,{align:'right'});
   rule(44,'ink',.35);
@@ -912,10 +922,10 @@ async function buildPdf(d){const jsPDF=await loadJsPDF(),q=quoteData(),logo=awai
   // Piezas
   const xQ=SIN_PRECIOS?R:128,xU=158,rowH=36,img=30,tx=M+img+8;
   const head=()=>{label('Pieza',tx,y);label('Cant.',xQ,y,{align:'right'});if(!SIN_PRECIOS){label('Precio unit.',xU,y,{align:'right'});label('Total',R,y,{align:'right'})}y+=3;rule(y);y+=4};
-  const newPage=()=>{doc.addPage();y=M+4;doc.addImage(logo,'PNG',M,M-4,30,30*120/490);font('normal',8);col('faint');doc.text(num,R,M,{align:'right'});y=M+12;head()};
+  const newPage=()=>{doc.addPage();y=M+4;doc.addImage(logo,'JPEG',M,M-4,30,30*120/490);font('normal',8);col('faint');doc.text(num,R,M,{align:'right'});y=M+12;head()};
   head();
   q.lines.forEach((l,i)=>{if(y+rowH>H-30)newPage();const it=l.it,m=MODELS[it.m],s=m.sizes[it.s];
-    doc.setFillColor(...C.bg);doc.rect(M,y,img,img,'F');try{doc.addImage(imgs[i],'PNG',M+1,y+1,img-2,img-2)}catch(e){}
+    doc.setFillColor(...C.bg);doc.rect(M,y,img,img,'F');if(imgs[i])try{doc.addImage(imgs[i],'JPEG',M,y,img,img)}catch(e){}
     font('normal',12.5);col('ink');doc.text(pieceName(it.m,it.s),tx,y+6);
     font('normal',9);col('soft');doc.text(dimsTxt(m,s),tx,y+11.5);
     label('Acabado',tx,y+18);font('normal',9.5);col('ink');doc.text(finLabel(it.f),tx+21,y+18);
@@ -946,7 +956,7 @@ try{if(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.pdf',{ty
 const WA_NUM='593962702093';
 const blobB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(b)});
 async function uploadPdf(p){if(p.url||!/^GUA-\d{6}$/.test(p.num))return p.url||'';
-  try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),30000);
+  try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),15000);
     const r=await fetch(COT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({accion:'pdf',num:p.num,b64:await blobB64(p.blob)}),signal:ctl.signal});clearTimeout(t);
     const j=await r.json();if(j.ok&&j.url)p.url=j.url}catch(e){}return p.url||''}
 function waText(p,d,url){const q=quoteData(),n=q.lines.reduce((a,l)=>a+l.q,0);
