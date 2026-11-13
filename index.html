@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- acabados: Pavona, Yagual, Jubones, Narrío, Vitrificado -->
+<!-- nota piezas a mano actualizada · acabados: Pavona, Yagual, Jubones, Narrío, Vitrificado -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -316,8 +316,8 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
     <div class="qtwrap"><table class="qt" id="qTable"></table></div>
     <div class="warnbox">
       <b>Piezas hechas a mano</b>
-      <span>Cada maceta se fabrica bajo pedido en Guachapala, Azuay. El tono, los poros del Coral y las grietas finas del Vitrificado varían de una pieza a otra y son parte del acabado.</span>
-      <span class="mono" style="font-size:13px">Tiempo de fabricación estimado: 3 a 4 semanas (supuesto de prueba).</span>
+      <span>Cada pieza se hace a mano y bajo pedido en Guachapala, Azuay. El tono, la textura y el dibujo de cada acabado (Pavona, Yagual, Jubones, Narrío y Vitrificado) varían de una pieza a otra y son parte de su carácter: no hay dos iguales.</span>
+      <span class="mono" style="font-size:13px">Disponibles a partir de mediados de enero. Los tiempos de entrega se anunciarán próximamente.</span>
     </div>
     <div class="row">
       <a class="btn primary" id="qWa" target="_blank" rel="noopener">Enviar por WhatsApp</a>
@@ -337,7 +337,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
       <div class="drop">
         <h2>Acabado desde foto</h2>
         <p class="hint">Sube una foto de frente de la superficie de una pieza, bien iluminada y sin sombras fuertes. Se aplica como textura a todos los modelos.</p>
-        <label class="f">Nombre del acabado<input id="tFinName" placeholder="Ej. Coral arena"></label>
+        <label class="f">Nombre del acabado<input id="tFinName" placeholder="Ej. Pavona arena"></label>
         <label class="f">Foto<input type="file" id="tFinFile" accept="image/*"></label>
         <div class="row"><button class="btn primary small" id="tFinAdd" disabled>Agregar acabado</button></div>
         <div class="swatches" id="tFinList"></div>
@@ -725,7 +725,7 @@ const pieceName=(m,k)=>{const M=MODELS[m];return M.sizes.length>1?`${M.name} ${M
 /* ---------------- Inventario (Google Sheets publicado como CSV) ---------------- */
 // Solo se publica el estado ("Disponible" / "Bajo pedido"), nunca la cantidad.
 const INV_URL='https://docs.google.com/spreadsheets/d/e/2PACX-1vRES9aZkdC7ymF_Y1-XRqSnCf2adkdnluN9T8hNm_FRKuPrzAGsa9Vq7c2ziIaknWqGsulrmeD1FXIl/pub?gid=160559192&single=true&output=csv';
-const PLAZO='3 a 4 semanas';
+const PLAZO='entrega por confirmar';
 const INV={};let invReady=false;
 const norm=t=>(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
 const pieceCode=(m,k)=>norm(MODELS[m].id+'-'+MODELS[m].sizes[k].k);
