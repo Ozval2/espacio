@@ -167,6 +167,8 @@ label.f input,label.f select{min-height:46px;border:1px solid var(--linea-2);bac
 .qt tfoot tr.tot td{font-size:18px;color:var(--claro);border-top:1px solid var(--linea-2)}
 .qtwrap{overflow-x:auto}
 .q-step{padding-top:4px}
+.q-falta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;font-size:12px;letter-spacing:.06em;color:var(--acento)}.q-falta .btn{min-height:30px;padding:0 12px;font-size:12px;border-color:var(--acento);color:var(--acento)}
+.block.need{animation:need 1s 2}@keyframes need{50%{box-shadow:0 0 0 2px var(--acento);border-radius:3px}}
 .qt td.ph{width:64px;padding-right:12px}.qt td.ph img{width:56px;height:56px;object-fit:contain;background:var(--plano);border-radius:2px;display:block}
 .q-err{font-size:12px;letter-spacing:0;text-transform:none;color:var(--acento);min-height:0}
 .q-err:empty{display:none}
@@ -799,15 +801,18 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   const sb=$('#cfgSet');sb.hidden=m.sizes.length<2||state.edit!=null;sb.textContent=`Agregar el set completo (${m.sizes.length} piezas)`;
   clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url+qlHash(d);$('#cfgBusy').hidden=true},full?0:120)}
 $('#cfgBack').onclick=()=>location.hash=state.edit!=null?'proyecto':'catalogo';
-$('#cfgAdd').onclick=()=>{const it={...state.draft};if(state.edit!=null){state.items[state.edit]=it;toast('Pieza actualizada')}else{if(state.example){state.items=[];state.qty=[];state.example=false}state.items.push(it);state.qty.push(1);toast('Agregada al conjunto')}
+// Una pieza no se agrega sin acabado elegido (el concreto crudo es solo la vista inicial).
+const sinAcabado=f=>!FINISHES[f]||!!FINISHES[f].oculto;
+function pedirAcabado(){const b=$('#cfgFins').closest('.block');b.scrollIntoView({behavior:'smooth',block:'center'});b.classList.remove('need');void b.offsetWidth;b.classList.add('need');toast('Elige un acabado antes de agregar la pieza')}
+$('#cfgAdd').onclick=()=>{if(sinAcabado(state.draft.f)){pedirAcabado();return}const it={...state.draft};if(state.edit!=null){state.items[state.edit]=it;toast('Pieza actualizada')}else{if(state.example){state.items=[];state.qty=[];state.example=false}state.items.push(it);state.qty.push(1);toast('Agregada al conjunto')}
   state.edit=null;save();counts();location.hash='proyecto'};
-$('#cfgSet').onclick=()=>{const d=state.draft,m=MODELS[d.m];if(state.example){state.items=[];state.qty=[];state.example=false}
+$('#cfgSet').onclick=()=>{const d=state.draft,m=MODELS[d.m];if(sinAcabado(d.f)){pedirAcabado();return}if(state.example){state.items=[];state.qty=[];state.example=false}
   m.sizes.forEach((_,k)=>{state.items.push({m:d.m,s:k,f:d.f,p:0});state.qty.push(1)});save();counts();toast(`Set ${m.name} agregado al conjunto`);location.hash='proyecto'};
 // Carrito desde la cámara: en iPhone, Quick Look muestra un botón con nombre y precio (los datos viajan en el enlace del modelo);
 // en Android, el botón flotante de la cámara. Ambos agregan la pieza sin salir de la cámara.
 function qlHash(d){const e=encodeURIComponent,F=FINISHES[d.f],P=PLANTS[d.p];
   return '#callToAction='+e('Agregar al carrito')+'&checkoutTitle='+e(pieceName(d.m,d.s))+'&checkoutSubtitle='+e(F.name+(d.p&&!SIN_PLANTAS?' · '+P.name:'')+(stockOf(d.m,d.s,d.f)?' · '+stockTxt(stockOf(d.m,d.s,d.f)):''))+(SIN_PRECIOS?'':'&price='+e(money(unit(d))))}
-function addFromAR(){const it={...state.draft};if(state.example){state.items=[];state.qty=[];state.example=false}
+function addFromAR(){const it={...state.draft};if(sinAcabado(it.f)){$('#arCartTxt').textContent='Primero elige un acabado';toast('Elige un acabado antes de agregar la pieza');return}if(state.example){state.items=[];state.qty=[];state.example=false}
   const i=state.items.findIndex(x=>x.m===it.m&&x.s===it.s&&x.f===it.f&&x.p===it.p);if(i>=0)state.qty[i]=(state.qty[i]||1)+1;else{state.items.push(it);state.qty.push(1)}
   save();counts();const b=$('#arCart');b.classList.add('ok');$('#arCartTxt').textContent='Agregado al carrito';setTimeout(()=>{b.classList.remove('ok');$('#arCartTxt').textContent='Agregar otra'},1800);toast(pieceName(it.m,it.s)+' agregada al carrito')}
 $('#arCart').addEventListener('click',e=>{e.stopPropagation();addFromAR()});
@@ -827,7 +832,7 @@ async function renderPrj(){const L=$('#prjList');L.innerHTML='';
   if(state.example){const n=document.createElement('p');n.className='warnbox';n.innerHTML='<b>Conjunto de ejemplo</b><span>Al agregar tu primera pieza, este ejemplo se reemplaza.</span>';L.appendChild(n)}
   const box=document.createElement('div');box.className='items';
   for(const [i,it] of state.items.entries()){const key='i'+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),200,200);
-    const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${pieceName(it.m,it.s)}${SIN_PRECIOS?'':' · '+money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${FINISHES[it.f].name}${it.p&&!SIN_PLANTAS?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
+    const r=document.createElement('div');r.className='item';r.innerHTML=`<img alt="" src="${thumbs[key]}"><div class="t"><b>${pieceName(it.m,it.s)}${SIN_PRECIOS?'':' · '+money(unit(it))}</b><span>${dimsTxt(MODELS[it.m],MODELS[it.m].sizes[it.s])} · ${sinAcabado(it.f)?'<b style="color:var(--acento);font-weight:400">Falta elegir el acabado</b>':FINISHES[it.f].name}${it.p&&!SIN_PLANTAS?' · '+PLANTS[it.p].name:''}</span></div><div class="acts"><button class="btn small" data-e>Editar</button><button class="btn small" data-x aria-label="Quitar">Quitar</button></div>`;
     r.querySelector('[data-e]').onclick=()=>{state.draft={...it};state.edit=i;location.hash='configurar'};
     r.querySelector('[data-x]').onclick=()=>{state.items.splice(i,1);state.qty.splice(i,1);state.example=false;save();counts();renderPrj()};box.appendChild(r)}
   L.appendChild(box);
@@ -871,9 +876,10 @@ function warmPdf(){if(!state.items.length)return;loadJsPDF().catch(()=>{});logoP
   (async()=>{for(const it of state.items){try{await pdfImg(it)}catch(e){}}})()}
 function renderQuote(){const T=$('#qTable');const q=quoteData();$('#qPdf').disabled=$('#qWa').disabled=!state.items.length;lastPdf=null;
   if(!state.items.length){T.innerHTML='<tbody><tr><td>No hay piezas en el pedido. <a href="#catalogo">Ir al catálogo</a></td></tr></tbody>';}
-  else{T.innerHTML=`<thead><tr><th></th><th>Pieza</th><th>Cant.</th>${SIN_PRECIOS?'':'<th class="n">Total</th>'}</tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td class="ph"><img alt="" data-i="${i}"></td><td>${itemLine(l.it)}${SIN_PRECIOS?'':`<br><span class="mono hint">${money2(l.u)} c/u</span>`}${stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td>${SIN_PRECIOS?'':`<td class="n">${money2(l.u*l.q)}</td>`}</tr>`).join('')}</tbody>
+  else{T.innerHTML=`<thead><tr><th></th><th>Pieza</th><th>Cant.</th>${SIN_PRECIOS?'':'<th class="n">Total</th>'}</tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td class="ph"><img alt="" data-i="${i}"></td><td>${itemLine(l.it)}${SIN_PRECIOS?'':`<br><span class="mono hint">${money2(l.u)} c/u</span>`}${sinAcabado(l.it.f)?`<span class="q-falta">Falta elegir el acabado <button class="btn small" data-f="${i}">Elegir acabado</button></span>`:stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td>${SIN_PRECIOS?'':`<td class="n">${money2(l.u*l.q)}</td>`}</tr>`).join('')}</tbody>
   ${SIN_PRECIOS?'':`<tfoot><tr><td></td><td colspan="2">Subtotal</td><td class="n">${money2(q.sub)}</td></tr>${q.desc?`<tr><td></td><td colspan="2">Descuento ${q.t.n} (${Math.round(q.t.d*100)} %)</td><td class="n">−${money2(q.desc)}</td></tr>`:''}<tr><td></td><td colspan="2">IVA 15 %</td><td class="n">${money2(q.iva)}</td></tr><tr class="tot"><td></td><td colspan="2">Total</td><td class="n">${money2(q.total)}</td></tr></tfoot>`}`;
   T.querySelectorAll('img[data-i]').forEach(async im=>{try{im.src=await itemImg(state.items[+im.dataset.i],200)}catch(e){}});
+  T.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{const i=+b.dataset.f;state.draft={...state.items[i]};state.edit=i;location.hash='configurar'});
   T.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const i=+b.dataset.d;state.qty[i]=Math.max(1,(state.qty[i]||1)-1);save();counts();renderQuote()});
   T.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const i=+b.dataset.u;state.qty[i]=(state.qty[i]||1)+1;save();counts();renderQuote()})}
   $('#qNote').textContent='La cotización incluye tus datos, cada pieza con su acabado y su disponibilidad. Al enviarla por WhatsApp, GUABLID recibe el PDF y te confirma precios y tiempos de entrega.'}
@@ -946,7 +952,9 @@ async function buildPdf(d){const numP=quoteNumber(d);// el número se pide mient
   // Pie de página
   const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);rule(H-16);font('normal',7.5);col('faint');doc.text('guablid.com  ·  hola@guablid.com  ·  @guablid',M,H-11);doc.text(`${p} / ${n}`,R,H-11,{align:'right'})}
   const name=`Cotizacion-GUABLID-${num}.pdf`;return {blob:doc.output('blob'),name,num}}
-async function makePdf(){if(!state.items.length){toast('Agrega al menos una pieza');return null}
+function faltaAcabado(){const n=state.items.filter(it=>sinAcabado(it.f)).length;if(!n)return false;
+  $('#qTable').scrollIntoView({behavior:'smooth',block:'center'});toast(`Falta elegir el acabado de ${n} pieza${n>1?'s':''}`);return true}
+async function makePdf(){if(!state.items.length){toast('Agrega al menos una pieza');return null}if(faltaAcabado())return null;
   const d=checkClient();if(!d){$('#qForm').scrollIntoView({behavior:'smooth',block:'start'});toast('Completa tus datos para generar la cotización');return null}
   if(lastPdf)return lastPdf;const b=$('#qPdf');b.disabled=true;const t0=b.textContent;b.textContent='Generando PDF…';
   try{lastPdf=await buildPdf(d);return lastPdf}catch(e){toast(e.message||'No se pudo generar el PDF');return null}finally{b.disabled=false;b.textContent=t0}}
@@ -964,7 +972,7 @@ function waText(p,d,url){const q=quoteData(),n=q.lines.reduce((a,l)=>a+l.q,0);
   q.lines.forEach(l=>{s+=`• ${pieceName(l.it.m,l.it.s)} · ${finLabel(l.it.f)} · ${l.q} u\n`});
   if(url)s+=`\nCotización en PDF: ${url}`;else s+=`\nTengo la cotización en PDF y se la envío por aquí.`;
   return s}
-$('#qWa').onclick=async()=>{if(!state.items.length){toast('Agrega al menos una pieza');return}
+$('#qWa').onclick=async()=>{if(!state.items.length){toast('Agrega al menos una pieza');return}if(faltaAcabado())return;
   if(!checkClient()){$('#qForm').scrollIntoView({behavior:'smooth',block:'start'});toast('Completa tus datos para enviar la cotización');return}
   // La ventana se abre en el mismo toque para que el navegador no la bloquee.
   let w=null;try{w=window.open('','_blank');if(w)w.document.write('<p style="font:16px sans-serif;padding:24px">Preparando tu cotización…</p>')}catch(e){}
