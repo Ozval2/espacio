@@ -166,6 +166,11 @@ label.f input,label.f select{min-height:46px;border:1px solid var(--linea-2);bac
 .qt tfoot td{border-bottom:0;padding-top:10px;color:var(--suave)}
 .qt tfoot tr.tot td{font-size:18px;color:var(--claro);border-top:1px solid var(--linea-2)}
 .qtwrap{overflow-x:auto}
+.q-step{padding-top:4px}
+.qt td.ph{width:64px;padding-right:12px}.qt td.ph img{width:56px;height:56px;object-fit:contain;background:var(--plano);border-radius:2px;display:block}
+.q-err{font-size:12px;letter-spacing:0;text-transform:none;color:var(--acento);min-height:0}
+.q-err:empty{display:none}
+label.f.bad input{border-color:var(--acento)}
 .qty{display:inline-flex;align-items:center;border:1px solid var(--linea-2);border-radius:2px}
 .qty button{width:30px;height:30px;border:0;background:none;cursor:pointer;color:var(--claro)}
 .qty span{min-width:22px;text-align:center;font-variant-numeric:tabular-nums}
@@ -303,16 +308,23 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
     <div class="head">
       <span class="eyebrow">Carrito</span>
       <h1>Tu pedido</h1>
-      <p class="lede">Revisa las piezas, elige el tipo de cliente y envía el pedido por WhatsApp. Te confirmamos disponibilidad, tiempos y forma de pago.</p>
+      <p class="lede">Registra tus datos, revisa las piezas y descarga tu cotización en PDF.</p>
     </div>
-    <div class="form">
-      <label class="f">Nombre del cliente o proyecto<input id="qName" placeholder="Ej. Casa Ordóñez, terraza"></label>
+    <h3 class="q-step">1 · Tus datos</h3>
+    <form class="form" id="qForm" novalidate onsubmit="return false">
+      <label class="f" data-k="cli">Nombre del cliente<input id="qCli" autocomplete="name" placeholder="Nombre y apellido o razón social"><small class="q-err"></small></label>
+      <label class="f" data-k="pro">Nombre del proyecto<input id="qName" placeholder="Ej. Casa Ordóñez, terraza"><small class="q-err"></small></label>
+      <label class="f" data-k="id">Cédula o RUC<input id="qId" inputmode="numeric" maxlength="13" placeholder="10 o 13 dígitos"><small class="q-err"></small></label>
+      <label class="f" data-k="mail">Correo<input id="qMail" type="email" autocomplete="email" placeholder="nombre@correo.com"><small class="q-err"></small></label>
+      <label class="f" data-k="tel">Teléfono<input id="qTel" type="tel" autocomplete="tel" placeholder="Ej. 099 123 4567"><small class="q-err"></small></label>
+      <label class="f" data-k="dir">Dirección<input id="qDir" autocomplete="street-address" placeholder="Ciudad, calle y número"><small class="q-err"></small></label>
       <label class="f" id="qTypeWrap">Tipo de cliente<select id="qType">
         <option value="final">Cliente final</option>
         <option value="pro">Arquitecto o paisajista (−15 %)</option>
         <option value="tienda">Tienda de diseño (−25 %)</option>
         <option value="fora">FORA (−30 %)</option></select></label>
-    </div>
+    </form>
+    <h3 class="q-step">2 · Piezas</h3>
     <div class="qtwrap"><table class="qt" id="qTable"></table></div>
     <div class="warnbox">
       <b>Piezas hechas a mano</b>
@@ -320,8 +332,8 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
       <span class="mono" style="font-size:13px">Disponibles a partir de mediados de enero. Los tiempos de entrega se anunciarán próximamente.</span>
     </div>
     <div class="row">
-      <a class="btn primary" id="qWa" target="_blank" rel="noopener">Enviar por WhatsApp</a>
-      <button class="btn" id="qCopy">Copiar texto</button>
+      <button class="btn primary" id="qPdf">Descargar cotización PDF</button>
+      <button class="btn" id="qShare" hidden>Compartir PDF</button>
       <button class="btn" id="qLink">Copiar enlace del proyecto</button>
     </div>
     <p class="note" id="qNote"></p>
@@ -828,21 +840,99 @@ function shareCode(){return state.items.map((it,i)=>[it.m,it.s,it.f,it.p,state.q
 function shareLink(){const base=location.href.split('#')[0].split('?')[0];return state.items.length?`${base}?p=${shareCode()}#proyecto`:base}
 function quoteData(){const t=CLIENT[$('#qType').value];const lines=state.items.map((it,i)=>({it,q:state.qty[i]||1,u:unit(it)}));
   const sub=lines.reduce((a,l)=>a+l.u*l.q,0),desc=sub*t.d,base=sub-desc,iva=base*IVA;return {t,lines,sub,desc,base,iva,total:base+iva}}
-function quoteText(){const q=quoteData(),n=$('#qName').value.trim();let s=`Hola, quiero cotizar estas piezas${n?' para '+n:''}:\n\n`;
-  q.lines.forEach((l,i)=>{const st=stockOf(l.it.m,l.it.s,l.it.f);s+=`${i+1}. ${itemLine(l.it)}${st?' ('+stockTxt(st)+')':''} — ${l.q} u${SIN_PRECIOS?'':` × ${money2(l.u)} = ${money2(l.u*l.q)}`}\n`});
-  if(SIN_PRECIOS)s+=`\nQuedo atento a la cotización.`;else{s+=`\nSubtotal: ${money2(q.sub)}`;if(q.desc)s+=`\nDescuento ${q.t.n} (${Math.round(q.t.d*100)} %): −${money2(q.desc)}`;s+=`\nIVA 15 %: ${money2(q.iva)}\nTotal: ${money2(q.total)}\n\nPrecios de prueba.`}
-  if(!inFrame)s+=`\nVer el proyecto en 3D: ${shareLink()}`;return s}
-function renderQuote(){const T=$('#qTable');const q=quoteData();
-  if(!state.items.length){T.innerHTML='<tbody><tr><td>No hay piezas en el proyecto. <a href="#catalogo">Ir al catálogo</a></td></tr></tbody>';}
-  else{T.innerHTML=`<thead><tr><th>Pieza</th><th>Cant.</th>${SIN_PRECIOS?'':'<th class="n">Total</th>'}</tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td>${itemLine(l.it)}${SIN_PRECIOS?'':`<br><span class="mono hint">${money2(l.u)} c/u</span>`}${stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td>${SIN_PRECIOS?'':`<td class="n">${money2(l.u*l.q)}</td>`}</tr>`).join('')}</tbody>
-  ${SIN_PRECIOS?'':`<tfoot><tr><td colspan="2">Subtotal</td><td class="n">${money2(q.sub)}</td></tr>${q.desc?`<tr><td colspan="2">Descuento ${q.t.n} (${Math.round(q.t.d*100)} %)</td><td class="n">−${money2(q.desc)}</td></tr>`:''}<tr><td colspan="2">IVA 15 %</td><td class="n">${money2(q.iva)}</td></tr><tr class="tot"><td colspan="2">Total</td><td class="n">${money2(q.total)}</td></tr></tfoot>`}`;
+// Datos del cliente: se recuerdan en este navegador para no volver a escribirlos.
+const CKEY='guablid-cliente-v1',QF={cli:'#qCli',pro:'#qName',id:'#qId',mail:'#qMail',tel:'#qTel',dir:'#qDir'};
+try{const d=JSON.parse(localStorage.getItem(CKEY)||'{}');for(const k in QF)if(d[k])$(QF[k]).value=d[k]}catch(e){}
+const clientData=()=>{const d={};for(const k in QF)d[k]=$(QF[k]).value.trim();return d};
+function checkClient(){const d=clientData(),e={};
+  if(d.cli.length<3)e.cli='Escribe el nombre del cliente.';
+  const id=d.id.replace(/\D/g,'');if(!/^(\d{10}|\d{13})$/.test(id))e.id='La cédula tiene 10 dígitos y el RUC 13.';
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.mail))e.mail='Revisa el correo.';
+  if(d.tel.replace(/\D/g,'').length<7)e.tel='Revisa el número de teléfono.';
+  if(d.dir.length<5)e.dir='Escribe la dirección.';
+  document.querySelectorAll('#qForm label.f[data-k]').forEach(l=>{const m=e[l.dataset.k]||'';l.classList.toggle('bad',!!m);l.querySelector('.q-err').textContent=m});
+  const first=Object.keys(QF).find(k=>e[k]);if(first)$(QF[first]).focus();return first?null:d}
+Object.values(QF).forEach(sel=>$(sel).addEventListener('input',e=>{try{localStorage.setItem(CKEY,JSON.stringify(clientData()))}catch(_){}
+  const l=e.target.closest('label');if(l.classList.contains('bad')){l.classList.remove('bad');l.querySelector('.q-err').textContent=''}lastPdf=null}));
+$('#qId').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'')});
+const finLabel=f=>FINISHES[f].oculto?'Por definir':FINISHES[f].name;
+const availTxt=st=>st==='ok'?'Disponible en stock':st==='pedido'?'Bajo pedido · '+PLAZO:'Disponibilidad por confirmar';
+async function itemImg(it,size){const key=(size>200?'pdf':'i')+JSON.stringify(it);if(!thumbs[key])thumbs[key]=thumb(await pieceGroup(it),size,size);return thumbs[key]}
+function renderQuote(){const T=$('#qTable');const q=quoteData();$('#qPdf').disabled=!state.items.length;lastPdf=null;
+  if(!state.items.length){T.innerHTML='<tbody><tr><td>No hay piezas en el pedido. <a href="#catalogo">Ir al catálogo</a></td></tr></tbody>';}
+  else{T.innerHTML=`<thead><tr><th></th><th>Pieza</th><th>Cant.</th>${SIN_PRECIOS?'':'<th class="n">Total</th>'}</tr></thead><tbody>${q.lines.map((l,i)=>`<tr><td class="ph"><img alt="" data-i="${i}"></td><td>${itemLine(l.it)}${SIN_PRECIOS?'':`<br><span class="mono hint">${money2(l.u)} c/u</span>`}${stockTag(stockOf(l.it.m,l.it.s,l.it.f),'blk')}</td><td><span class="qty"><button data-d="${i}" aria-label="Menos">−</button><span>${l.q}</span><button data-u="${i}" aria-label="Más">+</button></span></td>${SIN_PRECIOS?'':`<td class="n">${money2(l.u*l.q)}</td>`}</tr>`).join('')}</tbody>
+  ${SIN_PRECIOS?'':`<tfoot><tr><td></td><td colspan="2">Subtotal</td><td class="n">${money2(q.sub)}</td></tr>${q.desc?`<tr><td></td><td colspan="2">Descuento ${q.t.n} (${Math.round(q.t.d*100)} %)</td><td class="n">−${money2(q.desc)}</td></tr>`:''}<tr><td></td><td colspan="2">IVA 15 %</td><td class="n">${money2(q.iva)}</td></tr><tr class="tot"><td></td><td colspan="2">Total</td><td class="n">${money2(q.total)}</td></tr></tfoot>`}`;
+  T.querySelectorAll('img[data-i]').forEach(async im=>{try{im.src=await itemImg(state.items[+im.dataset.i],200)}catch(e){}});
   T.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const i=+b.dataset.d;state.qty[i]=Math.max(1,(state.qty[i]||1)-1);save();counts();renderQuote()});
   T.querySelectorAll('[data-u]').forEach(b=>b.onclick=()=>{const i=+b.dataset.u;state.qty[i]=(state.qty[i]||1)+1;save();counts();renderQuote()})}
-  $('#qWa').href='https://wa.me/?text='+encodeURIComponent(quoteText());
-  $('#qNote').textContent=inFrame?'El enlace del proyecto se activa cuando la página esté publicada en tu propio sitio. Mientras tanto, el texto copiado incluye todas las piezas.':'El enlace abre este mismo proyecto en 3D, listo para verlo en el espacio.'}
-$('#qTypeWrap').hidden=SIN_PRECIOS;$('#qType').onchange=renderQuote;$('#qName').oninput=renderQuote;
+  $('#qNote').textContent='El PDF incluye tus datos, cada pieza con su acabado y su disponibilidad. Envíalo a GUABLID por WhatsApp o correo y te confirmamos precios y tiempos de entrega.'}
+$('#qTypeWrap').hidden=SIN_PRECIOS;$('#qType').onchange=renderQuote;
 async function copy(txt,ok){try{await navigator.clipboard.writeText(txt);toast(ok)}catch(e){const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast(ok)}catch(_){toast('No se pudo copiar. Selecciona el texto manualmente.')}ta.remove()}}
-$('#qCopy').onclick=()=>copy(quoteText(),'Texto de la cotización copiado');
+
+/* Cotización en PDF */
+let lastPdf=null,jsPDFp=null;
+const loadJsPDF=()=>jsPDFp||(jsPDFp=new Promise((res,rej)=>{if(window.jspdf)return res(window.jspdf.jsPDF);const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  s.onload=()=>res(window.jspdf.jsPDF);s.onerror=()=>{jsPDFp=null;rej(new Error('No se pudo cargar el generador de PDF. Revisa tu conexión.'))};document.head.appendChild(s)}));
+let logoP=null;
+function logoPNG(){return logoP||(logoP=(async()=>{const ink='#262320',inner=el=>el.innerHTML.replaceAll('currentColor',ink);
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1960" height="480" viewBox="0 0 490 120"><svg x="0" y="0" width="120" height="120" viewBox="-6 -6 112 112">${inner($('.brand .sim'))}</svg><svg x="152" y="33" width="300" height="54" viewBox="-8 -10 667 120">${inner($('.brand .nom'))}</svg></svg>`;
+  const im=new Image();await new Promise((r,j)=>{im.onload=r;im.onerror=j;im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)});
+  const c=document.createElement('canvas');c.width=1960;c.height=480;c.getContext('2d').drawImage(im,0,0,1960,480);return c.toDataURL('image/png')})())}
+const fechaLarga=d=>d.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'});
+async function buildPdf(d){const jsPDF=await loadJsPDF(),q=quoteData(),logo=await logoPNG();
+  const imgs=[];for(const l of q.lines)imgs.push(await itemImg(l.it,480));
+  const doc=new jsPDF({unit:'mm',format:'a4'}),W=210,H=297,M=18,R=W-M;
+  const C={ink:[38,35,32],soft:[95,88,80],faint:[146,138,128],line:[221,214,203],acc:[156,79,46],bg:[243,239,232]};
+  const col=c=>doc.setTextColor(...C[c]),font=(st,sz)=>{doc.setFont('helvetica',st);doc.setFontSize(sz)};
+  const label=(t,x,y,o={})=>{font('normal',6.8);col(o.c||'faint');t=t.toUpperCase();if(o.align==='right')x-=doc.getTextWidth(t)+.55*t.length;doc.text(t,x,y,{charSpace:.55})};
+  const rule=(y,c='line',w=.2)=>{doc.setDrawColor(...C[c]);doc.setLineWidth(w);doc.line(M,y,R,y)};
+  const now=new Date(),pad=n=>String(n).padStart(2,'0');
+  const num=`GUA-${String(now.getFullYear()).slice(2)}${pad(now.getMonth()+1)}${pad(now.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+  // Encabezado
+  doc.addImage(logo,'PNG',M,M,50,50*120/490);
+  label('Cotización',R,M+3,{align:'right',c:'acc'});font('normal',12);col('ink');doc.text(num,R,M+9.5,{align:'right'});
+  font('normal',8.5);col('soft');doc.text(fechaLarga(now),R,M+14.5,{align:'right'});
+  rule(44,'ink',.35);
+  // Cliente
+  let y=53;const cx=[M,M+90],rows=[[['Cliente',d.cli],['Proyecto',d.pro||'—']],[['Cédula o RUC',d.id],['Correo',d.mail]],[['Teléfono',d.tel],['Dirección',d.dir]]];
+  if(!SIN_PRECIOS)rows.push([['Tipo de cliente',q.t.n],['','']]);
+  for(const r of rows){let h=0;r.forEach(([k,v],j)=>{if(!k)return;label(k,cx[j],y);font('normal',10);col('ink');const t=doc.splitTextToSize(v,82);doc.text(t,cx[j],y+5);h=Math.max(h,t.length)});y+=7+h*4.6}
+  y+=3;
+  // Piezas
+  const xQ=SIN_PRECIOS?R:128,xU=158,rowH=36,img=30,tx=M+img+8;
+  const head=()=>{label('Pieza',tx,y);label('Cant.',xQ,y,{align:'right'});if(!SIN_PRECIOS){label('Precio unit.',xU,y,{align:'right'});label('Total',R,y,{align:'right'})}y+=3;rule(y);y+=4};
+  const newPage=()=>{doc.addPage();y=M+4;doc.addImage(logo,'PNG',M,M-4,30,30*120/490);font('normal',8);col('faint');doc.text(num,R,M,{align:'right'});y=M+12;head()};
+  head();
+  q.lines.forEach((l,i)=>{if(y+rowH>H-30)newPage();const it=l.it,m=MODELS[it.m],s=m.sizes[it.s];
+    doc.setFillColor(...C.bg);doc.rect(M,y,img,img,'F');try{doc.addImage(imgs[i],'PNG',M+1,y+1,img-2,img-2)}catch(e){}
+    font('normal',12.5);col('ink');doc.text(pieceName(it.m,it.s),tx,y+6);
+    font('normal',9);col('soft');doc.text(dimsTxt(m,s),tx,y+11.5);
+    label('Acabado',tx,y+18);font('normal',9.5);col('ink');doc.text(finLabel(it.f),tx+21,y+18);
+    const st=stockOf(it.m,it.s,it.f);label('Entrega',tx,y+23.5);font('normal',9.5);col(st==='ok'?'ink':'acc');doc.text(availTxt(st),tx+21,y+23.5);
+    font('normal',11);col('ink');doc.text(String(l.q),xQ,y+6,{align:'right'});
+    if(!SIN_PRECIOS){font('normal',10);col('soft');doc.text(money2(l.u),xU,y+6,{align:'right'});col('ink');doc.text(money2(l.u*l.q),R,y+6,{align:'right'})}
+    y+=img+3;rule(y);y+=4});
+  // Totales
+  if(y>H-75)newPage();
+  y+=2;const tl=(k,v,big)=>{font('normal',big?11.5:9.5);col(big?'ink':'soft');doc.text(k,xU-28,y,{align:'left'});doc.text(v,R,y,{align:'right'});y+=big?7:5.5};
+  const nPiezas=q.lines.reduce((a,l)=>a+l.q,0);
+  if(SIN_PRECIOS){font('normal',9.5);col('soft');doc.text(`${nPiezas} pieza${nPiezas>1?'s':''} en total`,R,y,{align:'right'});y+=5.5;font('normal',9.5);col('acc');doc.text('Precios por confirmar',R,y,{align:'right'});y+=8}
+  else{tl('Subtotal',money2(q.sub));if(q.desc)tl(`Descuento ${Math.round(q.t.d*100)} %`,'-'+money2(q.desc));tl('IVA 15 %',money2(q.iva));rule(y-3.2);y+=1.5;tl('Total',money2(q.total),true)}
+  // Notas
+  y+=4;const note=(k,t)=>{label(k,M,y,{c:'acc'});font('normal',9);col('soft');const L=doc.splitTextToSize(t,R-M);doc.text(L,M,y+5,{lineHeightFactor:1.45});y+=7+L.length*4.6};
+  note('Piezas hechas a mano','Cada pieza se hace a mano y bajo pedido en Guachapala, Azuay. El tono, la textura y el dibujo de cada acabado varían de una pieza a otra y son parte de su carácter: no hay dos iguales.');
+  note('Disponibilidad y entrega','Piezas disponibles a partir de mediados de enero. GUABLID confirmará precios, tiempos de entrega y condiciones del pedido al responder esta solicitud.');
+  // Pie de página
+  const n=doc.getNumberOfPages();for(let p=1;p<=n;p++){doc.setPage(p);rule(H-16);font('normal',7.5);col('faint');doc.text('guablid.com  ·  hola@guablid.com  ·  @guablid',M,H-11);doc.text(`${p} / ${n}`,R,H-11,{align:'right'})}
+  const name=`Cotizacion-GUABLID-${num}.pdf`;return {blob:doc.output('blob'),name,num}}
+async function makePdf(){if(!state.items.length){toast('Agrega al menos una pieza');return null}
+  const d=checkClient();if(!d){$('#qForm').scrollIntoView({behavior:'smooth',block:'start'});toast('Completa tus datos para generar la cotización');return null}
+  if(lastPdf)return lastPdf;const b=$('#qPdf');b.disabled=true;const t0=b.textContent;b.textContent='Generando PDF…';
+  try{lastPdf=await buildPdf(d);return lastPdf}catch(e){toast(e.message||'No se pudo generar el PDF');return null}finally{b.disabled=false;b.textContent=t0}}
+$('#qPdf').onclick=async()=>{const p=await makePdf();if(!p)return;const u=URL.createObjectURL(p.blob),a=document.createElement('a');a.href=u;a.download=p.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),6e4);toast('Cotización '+p.num+' descargada')};
+try{if(navigator.canShare&&navigator.canShare({files:[new File(['x'],'x.pdf',{type:'application/pdf'})]}))$('#qShare').hidden=false}catch(e){}
+$('#qShare').onclick=async()=>{const p=await makePdf();if(!p)return;const file=new File([p.blob],p.name,{type:'application/pdf'});
+  try{await navigator.share({files:[file],title:'Cotización GUABLID '+p.num})}catch(e){if(e.name!=='AbortError')$('#qPdf').click()}};
 $('#qLink').onclick=()=>copy(shareLink(),'Enlace del proyecto copiado');
 
 /* Taller */
