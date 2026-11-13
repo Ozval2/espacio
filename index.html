@@ -324,6 +324,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
         <option value="tienda">Tienda de diseño (−25 %)</option>
         <option value="fora">FORA (−30 %)</option></select></label>
     </form>
+    <p class="hint">Usamos tus datos solo para preparar y responder tu cotización.</p>
     <h3 class="q-step">2 · Piezas</h3>
     <div class="qtwrap"><table class="qt" id="qTable"></table></div>
     <div class="warnbox">
@@ -879,6 +880,16 @@ function logoPNG(){return logoP||(logoP=(async()=>{const ink='#262320',inner=el=
   const im=new Image();await new Promise((r,j)=>{im.onload=r;im.onerror=j;im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)});
   const c=document.createElement('canvas');c.width=1960;c.height=480;c.getContext('2d').drawImage(im,0,0,1960,480);return c.toDataURL('image/png')})())}
 const fechaLarga=d=>d.toLocaleDateString('es-EC',{day:'numeric',month:'long',year:'numeric'});
+// Numeración consecutiva: la lleva la hoja "Cotizaciones GUABLID" (Google Apps Script).
+const COT_URL='https://script.google.com/macros/s/AKfycbyMsN55hgQh2QDEjBBch80o7GEkEa_q7cLVs-LtVa21iLxEPvvmxA8gqPK5pBVtoXoPUg/exec';
+async function quoteNumber(d){const q=quoteData();
+  const piezas=q.lines.map(l=>`${pieceName(l.it.m,l.it.s)} · ${dimsTxt(MODELS[l.it.m],MODELS[l.it.m].sizes[l.it.s])} · ${finLabel(l.it.f)} · ${l.q} u · ${availTxt(stockOf(l.it.m,l.it.s,l.it.f))}`).join('\n');
+  const body={...d,tipo:SIN_PRECIOS?'':q.t.n,piezas,cant:q.lines.reduce((a,l)=>a+l.q,0),total:SIN_PRECIOS?'':money2(q.total),enlace:inFrame?'':shareLink()};
+  try{const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),12000);
+    const r=await fetch(COT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),signal:ctl.signal});clearTimeout(t);
+    const j=await r.json();if(j.ok&&/^GUA-\d{6}$/.test(j.num))return j.num}catch(e){}
+  // Sin conexión con la hoja: número provisional, para que el cliente igual reciba su PDF.
+  const now=new Date(),pad=n=>String(n).padStart(2,'0');return `GUA-P${String(now.getFullYear()).slice(2)}${pad(now.getMonth()+1)}${pad(now.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`}
 async function buildPdf(d){const jsPDF=await loadJsPDF(),q=quoteData(),logo=await logoPNG();
   const imgs=[];for(const l of q.lines)imgs.push(await itemImg(l.it,480));
   const doc=new jsPDF({unit:'mm',format:'a4'}),W=210,H=297,M=18,R=W-M;
@@ -886,8 +897,7 @@ async function buildPdf(d){const jsPDF=await loadJsPDF(),q=quoteData(),logo=awai
   const col=c=>doc.setTextColor(...C[c]),font=(st,sz)=>{doc.setFont('helvetica',st);doc.setFontSize(sz)};
   const label=(t,x,y,o={})=>{font('normal',6.8);col(o.c||'faint');t=t.toUpperCase();if(o.align==='right')x-=doc.getTextWidth(t)+.55*t.length;doc.text(t,x,y,{charSpace:.55})};
   const rule=(y,c='line',w=.2)=>{doc.setDrawColor(...C[c]);doc.setLineWidth(w);doc.line(M,y,R,y)};
-  const now=new Date(),pad=n=>String(n).padStart(2,'0');
-  const num=`GUA-${String(now.getFullYear()).slice(2)}${pad(now.getMonth()+1)}${pad(now.getDate())}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+  const now=new Date(),num=await quoteNumber(d);
   // Encabezado
   doc.addImage(logo,'PNG',M,M,50,50*120/490);
   label('Cotización',R,M+3,{align:'right',c:'acc'});font('normal',12);col('ink');doc.text(num,R,M+9.5,{align:'right'});
