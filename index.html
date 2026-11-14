@@ -3,6 +3,13 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<script>
+/* Acceso solo para el equipo mientras el sitio está en proceso.
+   Para entrar: abrir una vez la dirección con ?equipo=gua-taller (queda recordado en ese navegador). */
+(function(){if(!/(^|\.)guablid\.com$/.test(location.hostname))return;var k='guablid-equipo',p=/[?&]equipo=gua-taller(&|$)/.test(location.search);
+try{if(p)localStorage.setItem(k,'1');if(p||localStorage.getItem(k)==='1')return}catch(e){if(p)return}location.replace('/')})();
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>GUABLID Espacio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -376,7 +383,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
     <a href="#catalogo" data-v="catalogo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 8h12l-1.6 12H7.6z"/><path d="M5 5h14v3H5z"/></svg>Catálogo</a>
     <a href="#proyecto" data-v="proyecto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 20h18"/><path d="M5 20l1-7h4l1 7"/><path d="M13 20l1-9h5l1 9"/></svg>Conjunto<span class="badge" id="navCount" hidden></span></a>
     <a href="#cotizacion" data-v="cotizacion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L20 8H7"/><circle cx="10" cy="19.5" r="1.2"/><circle cx="17" cy="19.5" r="1.2"/></svg>Carrito</a>
-    <a href="#taller" data-v="taller"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg>Taller</a>
+    <a href="#taller" data-v="taller" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M4 15v5h16v-5"/></svg>Taller</a>
   </div>
 </nav>
 <div class="toast" id="toast" hidden role="status"></div>
@@ -760,7 +767,10 @@ const itemLine=it=>{const m=MODELS[it.m],s=m.sizes[it.s];return `${pieceName(it.
 
 /* ---------------- Vistas ---------------- */
 const VIEWS=['catalogo','configurar','proyecto','cotizacion','taller'];
-function route(){let v=(location.hash||'#catalogo').slice(1);if(!VIEWS.includes(v))v='catalogo';
+// Taller: solo para el equipo (se activa con ?equipo=gua-taller).
+const EQUIPO=(()=>{try{return /[?&]equipo=gua-taller(&|$)/.test(location.search)||localStorage.getItem('guablid-equipo')==='1'}catch(e){return /[?&]equipo=gua-taller(&|$)/.test(location.search)}})();
+if(EQUIPO){const a=document.querySelector('nav.bar a[data-v="taller"]');if(a)a.hidden=false}else document.querySelector('nav.bar .in').style.gridTemplateColumns='repeat(3,1fr)';
+function route(){let v=(location.hash||'#catalogo').slice(1);if(!VIEWS.includes(v)||(v==='taller'&&!EQUIPO))v='catalogo';
   VIEWS.forEach(n=>$('#v-'+n).hidden=n!==v);
   document.querySelectorAll('nav.bar a').forEach(a=>a.toggleAttribute('aria-current',a.dataset.v===v||(v==='configurar'&&a.dataset.v==='catalogo')));
   document.querySelectorAll('nav.bar a').forEach(a=>{if(a.hasAttribute('aria-current'))a.setAttribute('aria-current','page')});
