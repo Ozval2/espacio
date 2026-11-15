@@ -1007,7 +1007,7 @@ function renderSel(){const P=$('#espSel'),sel=state.piezas.filter(p=>state.sel.h
   if(!sel.length){P.innerHTML=n?`<div class="tit"><b>Toca una pieza para seleccionarla</b>${multi}</div>
       <p class="hint">Arrástrala para moverla. Con varias seleccionadas, se mueven juntas y el acabado se aplica a todas.</p>
       <div class="row"><button class="btn small" id="selTodas">Seleccionar todas</button>${faltan.length?`<button class="btn small" id="selFaltan" style="border-color:var(--acento);color:var(--acento)">Sin acabado (${faltan.length})</button>`:''}</div>`
-    :`<p class="hint">Tu espacio está vacío. Arrastra una pieza desde la lista de arriba, o tócala para agregarla.</p>`;
+    :`<p class="hint">Tu espacio está vacío. Arrastra una pieza desde la lista de piezas, debajo del espacio, o tócala para agregarla.</p>`;
   }else{const mods=[...new Set(sel.map(p=>p.m))],uno=mods.length===1?MODELS[mods[0]]:null,fins=[...new Set(sel.map(p=>p.f))],fUno=fins.length===1?fins[0]:null;
     const nombres=sel.map(p=>pieceName(p.m,p.s)+(sinAcabado(p.f)?' <span class="falta">(sin acabado)</span>':' · '+FINISHES[p.f].name));
     P.innerHTML=`<div class="tit"><b>${sel.length===1?'1 pieza seleccionada':sel.length+' piezas seleccionadas'}</b>${multi}</div>
