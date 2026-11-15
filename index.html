@@ -321,7 +321,7 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
     <div class="head">
       <span class="eyebrow">Tu espacio</span>
       <h1>Acomoda tus piezas</h1>
-      <p class="lede">Arrastra las macetas al espacio y muévelas donde quieras. Luego elige su acabado y míralas a escala real con la cámara.</p>
+      <p class="lede">Arrastra las piezas al espacio y muévelas donde quieras. Luego elige su acabado y míralas a escala real con la cámara.</p>
     </div>
     <div class="esp-tools">
       <div class="esp-medidas" aria-label="Medidas de tu espacio">
@@ -883,7 +883,7 @@ function renderCfg(full){const d=state.draft,m=MODELS[d.m],s=m.sizes[d.s];
   $('#cfgFinName').textContent=FINISHES[d.f].oculto?'Elige uno':FINISHES[d.f].name;{const g=FINISHES[d.f].grp,t=g&&GRP_DESC[g];$('#cfgFinDesc').innerHTML=t?`<b>${g}:</b> ${t}`:'';$('#cfgFinDesc').hidden=!t}$('#cfgPlName').textContent=PLANTS[d.p].name+(d.p?` · ${Math.round(PLANTS[d.p].h*100)} cm aprox.`:'');
   const pf=$('#plFilters');pf.innerHTML='';PCATS.forEach(([k,n])=>{const b=document.createElement('button');b.className='chip';b.textContent=n;b.setAttribute('aria-pressed',state.plCat===k);b.onclick=()=>{state.plCat=k;renderCfg()};pf.appendChild(b)});
   const pl=$('#cfgPlants');pl.innerHTML='';PLANTS.forEach((p,i)=>{if(p.id!=='none'&&state.plCat!=='todas'&&(state.plCat==='realistas'?!p.real:p.cat!==state.plCat))return;const b=document.createElement('button');b.className='pl';b.setAttribute('aria-pressed',i===d.p);
-    b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la maceta</span>':`<img alt="" src="${p.real?MBASE.replace(/modelos\/$/,'plantas/')+'th-'+p.id+'.png':thumbs['p'+i]}">`}</div><b>${p.name}${p.real?' <span class="real">realista</span>':''}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
+    b.innerHTML=`<div class="img">${p.id==='none'?'<span class="hint" style="font-size:12px;text-align:center;padding:6px">Solo la pieza</span>':`<img alt="" src="${p.real?MBASE.replace(/modelos\/$/,'plantas/')+'th-'+p.id+'.png':thumbs['p'+i]}">`}</div><b>${p.name}${p.real?' <span class="real">realista</span>':''}</b><i>${p.h?Math.round(p.h*100)+' cm':''}${p.p?' · +'+money(p.p):''}</i>`;b.onclick=()=>{d.p=i;renderCfg()};pl.appendChild(b)});
   $('#cfgPrice').textContent=SIN_PRECIOS?'':money(unit(d));$('#cfgPrLbl').hidden=SIN_PRECIOS;$('#cfgStock').innerHTML=stockTag(stockOf(d.m,d.s,d.f),'blk');$('#arCartPrice').textContent=SIN_PRECIOS?'':money(unit(d));$('#arCartTxt').textContent='Agregar al carrito';
   const sb=$('#cfgSet');sb.hidden=m.sizes.length<2||state.edit!=null;sb.textContent=`Agregar el set completo (${m.sizes.length} piezas)`;
   clearTimeout(cfgTimer);$('#cfgBusy').hidden=false;cfgTimer=setTimeout(async()=>{const url=await toGLB(await sceneFor([d],0));const mv=$('#mvCfg');if(cfgURL)URL.revokeObjectURL(cfgURL);cfgURL=url;mv.src=url+qlHash(d);$('#cfgBusy').hidden=true},full?0:120)}
