@@ -163,6 +163,7 @@ model-viewer{width:100%;height:100%;--poster-color:transparent;background:transp
 
 /* Tu espacio */
 .esp-tools{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between}
+.esp-tools .chips{max-width:100%}
 .esp-medidas{display:flex;align-items:flex-end;gap:10px}
 .esp-medidas label.f{width:92px}
 .esp-medidas label.f input{min-height:40px}
@@ -330,7 +331,11 @@ model-viewer[ar-status="session-started"] .ar-cart,model-viewer[ar-status="objec
         <span class="u">metros</span>
       </div>
       <div class="chips" role="group" aria-label="Vista del espacio">
-        <button class="chip" data-vista="3d" aria-pressed="true">3D</button>
+        <button class="chip" data-vista="frontal" aria-pressed="true">Frontal</button>
+        <button class="chip" data-vista="trasera" aria-pressed="false">Trasera</button>
+        <button class="chip" data-vista="izq" aria-pressed="false">Lateral izq.</button>
+        <button class="chip" data-vista="der" aria-pressed="false">Lateral der.</button>
+        <button class="chip" data-vista="3d" aria-pressed="false">3D</button>
         <button class="chip" data-vista="planta" aria-pressed="false">Planta</button>
       </div>
     </div>
@@ -774,7 +779,7 @@ function swatchURL(id){const cv=finishCanvas(id),c=document.createElement('canva
 
 /* ---------------- Estado ---------------- */
 const KEY='guablid-ar-v1';
-const state={items:[],draft:{m:0,s:1,f:0,p:0},edit:null,gap:.15,layout:'grupo',catType:'todas',plCat:'todas',qty:[],piezas:[],esp:{w:3,d:2.5},sel:new Set(),vista:'3d',multi:false};
+const state={items:[],draft:{m:0,s:1,f:0,p:0},edit:null,gap:.15,layout:'grupo',catType:'todas',plCat:'todas',qty:[],piezas:[],esp:{w:3,d:2.5},sel:new Set(),vista:'frontal',multi:false};
 // Las piezas acomodadas en "Tu espacio" (una por unidad, con su posición) y la lista del carrito (items + cantidades)
 // se mantienen sincronizadas: cualquier cambio en una se refleja en la otra.
 const keyOf=it=>`${it.m}.${it.s}.${it.f}.${it.p}`;
@@ -920,11 +925,21 @@ function espInit(){if(ESP.r)return;const cv=$('#espCanvas');
   new ResizeObserver(()=>espSize()).observe($('#espStage'));
   cv.addEventListener('pointerdown',espDown,{capture:true});cv.addEventListener('pointermove',espMove);cv.addEventListener('pointerup',espUp);cv.addEventListener('pointercancel',espUp);
   espPiso();espSize()}
-function espSize(){if(!ESP.r)return;const st=$('#espStage'),w=st.clientWidth||800,h=st.clientHeight||500;ESP.r.setSize(w,h,false);ESP.cam3.aspect=w/h;ESP.cam3.updateProjectionMatrix();espCamP();}
+function espSize(){if(!ESP.r)return;const st=$('#espStage'),w=st.clientWidth||800,h=st.clientHeight||500;ESP.r.setSize(w,h,false);ESP.cam3.aspect=w/h;ESP.cam3.updateProjectionMatrix();espCamP();if(!ESP.anim&&ESP.ctl&&!ESP.movida)espVista(state.vista,false)}
 function espCamP(){const c=ESP.camP,st=$('#espStage'),asp=(st.clientWidth||800)/(st.clientHeight||500),W=state.esp.w/2+.35,D=state.esp.d/2+.35;
   let hw=W,hd=D;if(hw/hd>asp)hd=hw/asp;else hw=hd*asp;c.left=-hw;c.right=hw;c.top=hd;c.bottom=-hd;c.position.set(0,20,0);c.up.set(0,0,-1);c.lookAt(0,0,0);c.updateProjectionMatrix()}
-function espCam3(){const W=state.esp.w,D=state.esp.d,dist=Math.max(W,D)*1.15+1.6;ESP.ctl.target.set(0,.3,0);
-  ESP.cam3.position.set(dist*.42,dist*.78,dist*.86);ESP.ctl.minDistance=1.2;ESP.ctl.maxDistance=dist*2.4;ESP.ctl.update()}
+// Vistas rápidas: la cámara se ubica de frente, atrás o a un lado del espacio (o en diagonal), con una transición suave.
+const VISTAS={frontal:0,der:Math.PI/2,trasera:Math.PI,izq:-Math.PI/2};
+function vistaPos(v){const W=state.esp.w,D=state.esp.d,hmax=Math.max(.8,...state.piezas.map(p=>MODELS[p.m].sizes[p.s].h/100)),tgt=new THREE.Vector3(0,hmax*.42,0);
+  if(v==='3d'){const dist=Math.max(W,D)*1.15+1.6;return {pos:new THREE.Vector3(dist*.42,dist*.78,dist*.86),tgt:new THREE.Vector3(0,.3,0)}}
+  const az=VISTAS[v]??0,lat=v==='izq'||v==='der',ancho=lat?D:W,prof=lat?W:D,asp=ESP.cam3.aspect||1.6,tv=Math.tan(THREE.MathUtils.degToRad(17)),th=tv*asp;
+  const dist=Math.max((ancho/2+.45)/th,(hmax*.62+.25)/tv)+prof/2,el=THREE.MathUtils.degToRad(15);
+  return {pos:new THREE.Vector3(Math.sin(az)*Math.cos(el)*dist,tgt.y+Math.sin(el)*dist,Math.cos(az)*Math.cos(el)*dist),tgt}}
+function espVista(v,anim){if(!ESP.ctl||v==='planta')return;const {pos,tgt}=vistaPos(v),c=ESP.cam3;ESP.ctl.minDistance=1.2;ESP.ctl.maxDistance=Math.max(state.esp.w,state.esp.d)*3+4;
+  if(!anim){c.position.copy(pos);ESP.ctl.target.copy(tgt);ESP.ctl.update();ESP.anim=null;return}
+  ESP.anim={t0:performance.now(),p0:c.position.clone(),q0:ESP.ctl.target.clone(),p1:pos,q1:tgt}}
+function espAnim(){const a=ESP.anim;if(!a)return;let t=Math.min(1,(performance.now()-a.t0)/450);t=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+  ESP.cam3.position.lerpVectors(a.p0,a.p1,t);ESP.ctl.target.lerpVectors(a.q0,a.q1,t);if(t>=1)ESP.anim=null}
 // Piso del espacio: medidas reales, cuadrícula de 50 cm y 1 m, borde claro.
 function espPiso(){const sc=ESP.scene;if(ESP.piso){sc.remove(ESP.piso);ESP.piso.traverse(o=>{o.geometry?.dispose()})}
   const W=state.esp.w,D=state.esp.d,g=new THREE.Group();
@@ -936,7 +951,7 @@ function espPiso(){const sc=ESP.scene;if(ESP.piso){sc.remove(ESP.piso);ESP.piso.
   g.add(lin(fino,.06));g.add(lin(grueso,.14));
   const b=[[-W/2,-D/2],[W/2,-D/2],[W/2,D/2],[-W/2,D/2]].map(([x,z])=>new THREE.Vector3(x,.004,z));g.add(lin([b[0],b[1],b[1],b[2],b[2],b[3],b[3],b[0]],.55));
   sc.add(g);ESP.piso=g;const sh=ESP.dl.shadow.camera,m=Math.max(W,D)/2+1.5;sh.left=-m;sh.right=m;sh.top=m;sh.bottom=-m;sh.near=.5;sh.far=30;sh.updateProjectionMatrix();
-  espCamP();espCam3()}
+  espCamP();espVista(state.vista,false)}
 // Objetos 3D de cada pieza (se reconstruyen solo si cambia el modelo, la medida o el acabado).
 let espBuild=0;
 async function espUpdate(){espInit();const run=++espBuild;$('#espBusy').hidden=false;
@@ -952,8 +967,8 @@ async function espUpdate(){espInit();const run=++espBuild;$('#espBusy').hidden=f
 function espPos(){for(const [id,o] of ESP.objs){const pz=state.piezas.find(p=>p.id===id);if(!pz)continue;o.g.position.set(pz.x,0,pz.z);o.g.children[0].rotation.y=pz.r||0;o.anillo.visible=state.sel.has(id)}}
 function espInfo(){const n=state.piezas.length;$('#espVacio').hidden=n>0;$('#espInfo').textContent=`${String(state.esp.w).replace('.',',')} × ${String(state.esp.d).replace('.',',')} m${n?` · ${n} pieza${n>1?'s':''}`:''}`}
 function espLoop(){if(ESP.loop)return;ESP.loop=true;const tick=()=>{if($('#v-proyecto').hidden){ESP.loop=false;return}
-  if(state.vista==='3d')ESP.ctl.update();ESP.r.render(ESP.scene,state.vista==='3d'?ESP.cam3:ESP.camP);requestAnimationFrame(tick)};requestAnimationFrame(tick)}
-function espCam(){return state.vista==='3d'?ESP.cam3:ESP.camP}
+  if(state.vista!=='planta'){espAnim();ESP.ctl.update()}ESP.r.render(ESP.scene,state.vista==='planta'?ESP.camP:ESP.cam3);requestAnimationFrame(tick)};requestAnimationFrame(tick)}
+function espCam(){return state.vista==='planta'?ESP.camP:ESP.cam3}
 function ndc(e){const rc=$('#espCanvas').getBoundingClientRect();return new THREE.Vector2((e.clientX-rc.left)/rc.width*2-1,-((e.clientY-rc.top)/rc.height)*2+1)}
 function pisoEn(cx,cy){const rc=$('#espCanvas').getBoundingClientRect();ESP.ray.setFromCamera(new THREE.Vector2((cx-rc.left)/rc.width*2-1,-((cy-rc.top)/rc.height)*2+1),espCam());const p=new THREE.Vector3();return ESP.ray.ray.intersectPlane(PISO_Y,p)?[p.x,p.z]:null}
 function piezaEn(e){ESP.ray.setFromCamera(ndc(e),espCam());const hits=ESP.ray.intersectObjects([...ESP.objs.values()].map(o=>o.g.children[0]),true);
@@ -978,7 +993,7 @@ function espMove(e){if(!drag){$('#espCanvas').classList.toggle('sobre',e.pointer
 function espUp(e){const fueClick=down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<6;
   if(drag){drag=null;try{$('#espCanvas').releasePointerCapture(e.pointerId)}catch(_){}save();espARPrep()}
   else if(fueClick&&!down.id&&state.sel.size){state.sel.clear();espPos();renderSel()}
-  ESP.ctl.enabled=state.vista==='3d';down=null}
+  ESP.ctl.enabled=state.vista!=='planta';down=null}
 // Bandeja: arrastrar una pieza hacia el espacio (o tocarla para que caiga al centro).
 function renderTray(){const T=$('#espTray');if(T.dataset.ok)return;T.dataset.ok=1;
   MODELS.forEach((m,i)=>{const k=defSize(i),c=document.createElement('button');c.type='button';c.className='esp-card';c.dataset.m=i;
@@ -1031,11 +1046,12 @@ function renderSel(){const P=$('#espSel'),sel=state.piezas.filter(p=>state.sel.h
   const mu=$('#selMulti');if(mu)mu.onclick=()=>{state.multi=!state.multi;renderSel()};
   $('#prjAR').disabled=!n}
 // Vista 3D / planta y medidas del espacio
-document.querySelectorAll('[data-vista]').forEach(b=>b.onclick=()=>{state.vista=b.dataset.vista;document.querySelectorAll('[data-vista]').forEach(x=>x.setAttribute('aria-pressed',x===b));if(ESP.ctl)ESP.ctl.enabled=state.vista==='3d'});
+document.querySelectorAll('[data-vista]').forEach(b=>b.onclick=()=>{state.vista=b.dataset.vista;document.querySelectorAll('[data-vista]').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  if(ESP.ctl){ESP.ctl.enabled=state.vista!=='planta';espVista(state.vista,true)}});
 function espMedidas(){const w=clamp(+$('#espW').value||3,1,15),d=clamp(+$('#espD').value||2.5,1,15);if(w===state.esp.w&&d===state.esp.d)return;state.esp={w,d};
   state.piezas.forEach(clampPz);save();espPiso();espPos();espInfo();espARPrep()}
 $('#espW').onchange=espMedidas;$('#espD').onchange=espMedidas;
-function renderPrj(){espInit();$('#espW').value=state.esp.w;$('#espD').value=state.esp.d;if(state.example&&!state.piezas.length)syncToPiezas();
+function renderPrj(){espInit();state.vista='frontal';document.querySelectorAll('[data-vista]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vista==='frontal'));ESP.ctl.enabled=true;$('#espW').value=state.esp.w;$('#espD').value=state.esp.d;if(state.example&&!state.piezas.length)syncToPiezas();
   renderTray();espPiso();espSize();espUpdate();renderSel();espLoop()}
 // Para la cámara: el conjunto tal como quedó acomodado (se prepara solo, para que el botón responda al instante).
 function espARPrep(){clearTimeout(ESP.arT);ESP.arT=setTimeout(espARBuild,700)}
